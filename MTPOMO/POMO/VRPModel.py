@@ -4,6 +4,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class TaskDiscriminator(nn.Module):
+    def __init__(self, embedding_dim, hidden=128, num_tasks=5):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(embedding_dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, num_tasks)
+        )
+    def forward(self, enc):
+        # enc: (batch, problem+1, embedding)
+        pooled = enc.mean(dim=1)  # [batch, embedding]
+        return self.net(pooled)   # [batch, num_tasks]
+    
 class VRPModel(nn.Module):
 
     def __init__(self, **model_params):

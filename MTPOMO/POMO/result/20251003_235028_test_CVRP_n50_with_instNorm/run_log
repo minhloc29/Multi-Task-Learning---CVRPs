@@ -1,0 +1,6 @@
+[2025-10-03 21:50:29] test_n50.py(106) : DEBUG_MODE: False
+[2025-10-03 21:50:29] test_n50.py(107) : USE_CUDA: True, CUDA_DEVICE_NUM: 0
+[2025-10-03 21:50:29] test_n50.py(108) : env_params{'problem_type': 'CVRP', 'problem_size': 50, 'pomo_size': 50}
+[2025-10-03 21:50:29] test_n50.py(108) : model_params{'embedding_dim': 128, 'sqrt_embedding_dim': 11.313708498984761, 'encoder_layer_num': 6, 'qkv_dim': 16, 'head_num': 8, 'logit_clipping': 10, 'ff_hidden_dim': 512, 'eval_type': 'argmax'}
+[2025-10-03 21:50:29] test_n50.py(108) : tester_params{'use_cuda': True, 'cuda_device_num': 0, 'model_load': {'path': '../../Trained_models/50', 'epoch': 10000}, 'test_episodes': 5000, 'test_batch_size': 500, 'augmentation_enable': True, 'aug_factor': 8, 'aug_batch_size': 500, 'test_data_load': {'enable': False, 'filename': '../../../test_instances/data_CVRP_50_5000.pt'}}
+[2025-10-03 21:50:29] test_n50.py(108) : logger_params{'log_file': {'desc': 'test_CVRP_n50_with_instNorm', 'filename': 'run_log', 'filepath': './result/20251003_235028_test_CVRP_n50_with_instNorm'}}

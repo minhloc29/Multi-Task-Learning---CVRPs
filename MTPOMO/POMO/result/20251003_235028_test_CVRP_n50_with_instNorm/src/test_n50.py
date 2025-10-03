@@ -23,16 +23,14 @@ sys.path.insert(0, "../..")  # for utils
 import logging
 from utils.utils import create_logger, copy_all_src
 
-from VRPTrainer import VRPTrainer as Trainer
+from VRPTester import VRPTester as Tester
 
 
 ##########################################################################################
 # parameters
-# problem_type:
-# If problem_type = 'unified': trained on 20% CVRP, 20% OVRP, 20% VRPB, 20% VRPTW, 20% VRPL
-# problem_type can be CVRP, OVRP, VRPB, VRPTW, VRPL and their any combinations, e.g., OVRPBLTW
+# problem_type can be CVRP, OVRP, VRPB, VRPTW, VRPL and their any combinations, e.g., OVRPBTW
 env_params = {
-    'problem_type': 'unified', 
+    'problem_type': "CVRP", # test problem type
     'problem_size': 50,
     'pomo_size': 50,
 }
@@ -48,47 +46,32 @@ model_params = {
     'eval_type': 'argmax',
 }
 
-optimizer_params = {
-    'optimizer': {
-        'lr': 1e-4,
-        'weight_decay': 1e-6
-    },
-    'scheduler': {
-        'milestones': [8001, 8051],
-        'gamma': 0.1
-    }
-}
 
-trainer_params = {
+tester_params = {
     'use_cuda': USE_CUDA,
     'cuda_device_num': CUDA_DEVICE_NUM,
-    'epochs': 10000,
-    'train_episodes': 10 * 1000,
-    'train_batch_size': 32,
-    'prev_model_path': None,
-    'logging': {
-        'model_save_interval': 100,
-        'img_save_interval': 100,
-        'log_image_params_1': {
-            'json_foldername': 'log_image_style',
-            'filename': 'style_unified_100.json'
-        },
-        'log_image_params_2': {
-            'json_foldername': 'log_image_style',
-            'filename': 'style_loss_1.json'
-        },
-    },
     'model_load': {
-        'enable': False,  # enable loading pre-trained model
-        # 'path': './result/saved_unified50_model',  # directory path of pre-trained model and log files saved.
-        # 'epoch': 2000,  # epoch version of pre-trained model to laod.
-
-    }
+        'path': '../../Trained_models/50',  # directory path of pre-trained model and log files saved.
+        'epoch': 10000,  # epoch version of pre-trained model to laod.
+    },
+    'test_episodes': 5000,
+    'test_batch_size': 500,
+    'augmentation_enable': True,
+    'aug_factor': 8,
+    'aug_batch_size': 500,
+    'test_data_load': {
+        'enable': False,
+        'filename': '../../../test_instances/data_'+env_params['problem_type']+'_'+str(env_params['pomo_size'])\
+            +'_'+str(5000)+'.pt'
+    },
 }
+if tester_params['augmentation_enable']:
+    tester_params['test_batch_size'] = tester_params['aug_batch_size']
+
 
 logger_params = {
     'log_file': {
-        'desc': 'train_'+env_params['problem_type']+'_n'+str(env_params['problem_size'])+'_with_instNorm',
+        'desc': 'test_'+env_params['problem_type']+'_n'+str(env_params['problem_size'])+'_with_instNorm',
         'filename': 'run_log'
     }
 }
@@ -104,21 +87,18 @@ def main():
     create_logger(**logger_params)
     _print_config()
 
-    trainer = Trainer(env_params=env_params,
+    tester = Tester(env_params=env_params,
                       model_params=model_params,
-                      optimizer_params=optimizer_params,
-                      trainer_params=trainer_params)
+                      tester_params=tester_params)
 
-    copy_all_src(trainer.result_folder)
+    copy_all_src(tester.result_folder)
 
-    trainer.run()
+    tester.run()
 
 
 def _set_debug_mode():
-    global trainer_params
-    trainer_params['epochs'] = 2
-    trainer_params['train_episodes'] = 4
-    trainer_params['train_batch_size'] = 2
+    global tester_params
+    tester_params['test_episodes'] = 10
 
 
 def _print_config():

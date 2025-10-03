@@ -27,7 +27,8 @@ class VRPTester:
 
 
         # cuda
-        USE_CUDA = self.tester_params['use_cuda']
+        # USE_CUDA = self.tester_params['use_cuda']
+        USE_CUDA = 0
         if USE_CUDA:
             cuda_device_num = self.tester_params['cuda_device_num']
             torch.cuda.set_device(cuda_device_num)

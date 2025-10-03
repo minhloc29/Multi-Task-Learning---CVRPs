@@ -163,6 +163,7 @@ class VRPTrainer:
         self.model.train()
         self.env.load_problems(batch_size)
         reset_state, _, _ = self.env.reset()
+        # What is reset_state
         self.model.pre_forward(reset_state)
 
         prob_list = torch.zeros(size=(batch_size, self.env.pomo_size, 0))
