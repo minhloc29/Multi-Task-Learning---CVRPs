@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class TaskDiscriminator(nn.Module):
+class TaskDiscriminator(nn.Module): # put this after encoder step
     def __init__(self, embedding_dim, hidden=128, num_tasks=5):
         super().__init__()
         self.net = nn.Sequential(

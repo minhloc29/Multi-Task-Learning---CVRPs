@@ -7,15 +7,16 @@ from VRProblemDef import get_random_problems_mixed, augment_xy_data_by_8_fold
 
 @dataclass
 class Reset_State:
-    depot_xy: torch.Tensor = None
+    depot_xy: torch.Tensor = None # the coordinate where all vehicles start and end
     # shape: (batch, 1, 2)
     node_xy: torch.Tensor = None
-    # shape: (batch, problem, 2)
+    # shape: (batch, problem, 2) # set of coordinates for all nodes
     node_demand: torch.Tensor = None
     # shape: (batch, problem)
     node_earlyTW: torch.Tensor = None
     # shape: (batch, problem)
-    node_lateTW: torch.Tensor = None
+    # Earliest allowable service start time (for CVRPTW).
+    node_lateTW: torch.Tensor = None # Latest allowable service start time (for CVRPTW).
     # shape: (batch, problem)
     # route_open: torch.Tensor = None
     # # shape: (batch, problem)
@@ -52,7 +53,7 @@ class VRPEnv:
         # Const @INIT
         ####################################
         self.env_params = env_params
-        self.problem_size = env_params['problem_size']
+        self.problem_size = env_params['problem_size'] # size of nodes 
         self.pomo_size = env_params['pomo_size']
         self.problem_type = env_params['problem_type']
 

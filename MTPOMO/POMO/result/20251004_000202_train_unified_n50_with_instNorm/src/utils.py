@@ -338,5 +338,5 @@ def copy_all_src(dst_root):
 
                     dst_filepath = filepath.format(post_index)
 
-                # shutil.copy(src_abspath, dst_filepath)
+                shutil.copy(src_abspath, dst_filepath)
 
