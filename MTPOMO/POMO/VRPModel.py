@@ -28,7 +28,7 @@ class VRPModel(nn.Module):
         self.encoded_nodes = None
         # shape: (batch, problem+1, EMBEDDING_DIM)
 
-    def pre_forward(self, reset_state):
+    def pre_forward(self, reset_state): # get from VRPEnv.py
         depot_xy = reset_state.depot_xy
         # shape: (batch, 1, 2)
         node_xy = reset_state.node_xy

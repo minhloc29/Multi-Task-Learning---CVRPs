@@ -1,8 +1,7 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
+import torch.nn.functional as F      
 
 class VRPModel(nn.Module):
 
@@ -30,11 +29,12 @@ class VRPModel(nn.Module):
         # shape: (batch, problem+1, embedding)
         self.decoder.set_kv(self.encoded_nodes)
 
-    def forward(self, state):
+    def forward(self, state, adversarial = False):
         batch_size = state.BATCH_IDX.size(0)
         pomo_size = state.BATCH_IDX.size(1)
 
 
+        
         if state.selected_count == 0:  # First Move, depot
             selected = torch.zeros(size=(batch_size, pomo_size), dtype=torch.long)
             prob = torch.ones(size=(batch_size, pomo_size))

@@ -3,11 +3,11 @@ import torch
 from logging import getLogger
 
 from VRPEnv import VRPEnv as Env
-from VRPModel import VRPModel as Model
-
+from VRP_adversarial_model import VRPModel_AMTL as Model
+import torch.nn.functional as F
 from torch.optim import Adam as Optimizer
 from torch.optim.lr_scheduler import MultiStepLR as Scheduler
-
+from VRP_adversarial_model import TaskDiscriminator
 from utils.utils import *
 
 
@@ -31,6 +31,7 @@ class VRPTrainer:
 
         # cuda
         USE_CUDA = self.trainer_params['use_cuda']
+        USE_CUDA = 0
         if USE_CUDA:
             cuda_device_num = self.trainer_params['cuda_device_num']
             torch.cuda.set_device(cuda_device_num)
@@ -46,16 +47,39 @@ class VRPTrainer:
         self.optimizer = Optimizer(self.model.parameters(), **self.optimizer_params['optimizer'])
         self.scheduler = Scheduler(self.optimizer, **self.optimizer_params['scheduler'])
 
+        num_tasks = self.model_params.get('num_tasks', None)
+        if num_tasks is None:
+            raise ValueError("model_params must include 'num_tasks' for adversarial training.")
+
+        emb_dim = self.model_params['embedding_dim']
+        # instantiate discriminator (device will be consistent since same default tensor type)
+        self.discriminator = TaskDiscriminator(emb_dim=emb_dim, num_tasks=num_tasks)
+        # optimizer for discriminator
+        disc_opt_cfg = self.optimizer_params.get('discriminator_optimizer', {'lr': 1e-3})
+        self.disc_optimizer = Optimizer(self.discriminator.parameters(), **disc_opt_cfg)
+
+        # adversarial weight
+        self.lambda_adv = self.trainer_params.get('lambda_adv', 0.5)
+        # how many discriminator steps per batch (usually 1)
+        self.disc_steps = self.trainer_params.get('disc_steps', 1)
+        
         # Restore
         self.start_epoch = 1
         model_load = trainer_params['model_load']
         if model_load['enable']:
+            # existing checkpoint logic...
             checkpoint_fullname = '{path}/checkpoint-{epoch}.pt'.format(**model_load)
             checkpoint = torch.load(checkpoint_fullname, map_location=device)
             self.model.load_state_dict(checkpoint['model_state_dict'])
+            # optionally load discriminator state if present in checkpoint
+            if 'discriminator_state_dict' in checkpoint:
+                self.discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
             self.start_epoch = 1 + model_load['epoch']
             self.result_log.set_raw_data(checkpoint['result_log'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            # if discriminator optimizer state stored
+            if 'disc_optimizer_state_dict' in checkpoint:
+                self.disc_optimizer.load_state_dict(checkpoint['disc_optimizer_state_dict'])
             self.scheduler.last_epoch = model_load['epoch']-1
             self.logger.info('Saved Model Loaded !!')
 
@@ -104,7 +128,10 @@ class VRPTrainer:
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     'scheduler_state_dict': self.scheduler.state_dict(),
-                    'result_log': self.result_log.get_raw_data()
+                    'result_log': self.result_log.get_raw_data(),
+                    # new:
+                    'discriminator_state_dict': self.discriminator.state_dict(),
+                    'disc_optimizer_state_dict': self.disc_optimizer.state_dict(),
                 }
                 torch.save(checkpoint_dict, '{}/checkpoint-{}.pt'.format(self.result_folder, epoch))
 
@@ -161,43 +188,71 @@ class VRPTrainer:
         # Prep
         ###############################################
         self.model.train()
+        self.discriminator.train()
         self.env.load_problems(batch_size)
         reset_state, _, _ = self.env.reset()
         self.model.pre_forward(reset_state)
 
-        prob_list = torch.zeros(size=(batch_size, self.env.pomo_size, 0))
-        # shape: (batch, pomo, 0~problem)
+        # --- obtain task labels for this batch --------------------------------
+        # Preferably reset_state contains task ids (tensor of shape [batch])
+        if hasattr(reset_state, 'task_id'):
+            # assume shape [batch]
+            task_ids = reset_state.task_id.to(torch.long)
+        elif hasattr(self.env, 'current_task_ids'):
+            task_ids = torch.tensor(self.env.current_task_ids, dtype=torch.long)
+        else:
+            # fallback: assume single global task (all zeros)
+            # **Better:** make sure your Env returns task ids for multi-task training.
+            task_ids = torch.zeros(batch_size, dtype=torch.long)
+        # Move to same device as model encoded nodes:
+        task_ids = task_ids.to(self.model.encoded_nodes.device)
+        # ---------------------------------------------------------------------
 
-        # POMO Rollout
-        ###############################################
+        # ----------------- Step A: Train Discriminator -----------------------
+        # Use encoder outputs detached so encoder is not updated here.
+        encoded_nodes_detached = self.model.encoded_nodes.detach()  # [B, N, E]
+
+        # Optionally perform multiple discriminator steps
+        for _ in range(self.disc_steps):
+            self.disc_optimizer.zero_grad()
+            disc_logits = self.discriminator(encoded_nodes_detached)  # [B, num_tasks]
+            loss_disc = F.cross_entropy(disc_logits, task_ids)
+            loss_disc.backward()
+            self.disc_optimizer.step()
+        # ---------------------------------------------------------------------
+
+        # POMO Rollout (same as before)
+        prob_list = torch.zeros(size=(batch_size, self.env.pomo_size, 0), device=self.model.encoded_nodes.device)
         state, reward, done = self.env.pre_step()
-
         while not done:
-            selected, prob = self.model(state)
-            # shape: (batch, pomo)
+            selected, prob, disc_logits_for_encoder = self.model(state)
             state, reward, done = self.env.step(selected)
             prob_list = torch.cat((prob_list, prob[:, :, None]), dim=2)
 
-        # Loss
-        ###############################################
-        # reward_mean = reward.float().mean(dim=1, keepdims=True)
-        # advantage = torch.div((reward - reward_mean),-reward_mean) # normalize different probelms have different level of rewards
-        advantage = reward - reward.float().mean(dim=1, keepdims=True)
-        # shape: (batch, pomo)
-        log_prob = prob_list.log().sum(dim=2)
-        # size = (batch, pomo)
-        loss = -advantage * log_prob  # Minus Sign: To Increase REWARD
-        # shape: (batch, pomo)
-        loss_mean = loss.mean()
+        # Loss: REINFORCE-style (same as before)
+        advantage = reward - reward.float().mean(dim=1, keepdims=True)   # [B, pomo]
+        log_prob = prob_list.log().sum(dim=2)                            # [B, pomo]
+        loss_per_sample = -advantage * log_prob                           # [B, pomo]
+        loss_mean = loss_per_sample.mean()                                # scalar
 
-        # Score
-        ###############################################
-        max_pomo_reward, _ = reward.max(dim=1)  # get best results from pomo
-        score_mean = -max_pomo_reward.float().mean()  # negative sign to make positive value
+        # ----------------- Step B: Encoder+Decoder Adversarial Update -------
+        # Compute discriminator logits WITHOUT detach so gradients flow into encoder
+        loss_disc_for_encoder = F.cross_entropy(disc_logits_for_encoder, task_ids)
 
-        # Step & Return
-        ###############################################
+        # Total loss: minimize routing objective AND *fool* discriminator
+        total_loss = loss_mean - (self.lambda_adv * loss_disc_for_encoder)
+
+        # Backprop and step main optimizer (encoder+decoder)
         self.model.zero_grad()
-        loss_mean.backward()
+        # note: if discriminator shares params with model (it shouldn't), you may need to zero it too
+        self.optimizer.zero_grad()
+        total_loss.backward()
         self.optimizer.step()
+        # ---------------------------------------------------------------------
+
+        # Score (same as before)
+        max_pomo_reward, _ = reward.max(dim=1)  # [B]
+        score_mean = -max_pomo_reward.float().mean()
+
         return score_mean.item(), loss_mean.item()
+

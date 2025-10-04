@@ -22,15 +22,12 @@ sys.path.insert(0, "../..")  # for utils
 
 import logging
 from utils.utils import create_logger, copy_all_src
-
 from VRPTrainer import VRPTrainer as Trainer
 
 
 ##########################################################################################
 # parameters
-# problem_type:
-# If problem_type = 'unified': trained on 20% CVRP, 20% OVRP, 20% VRPB, 20% VRPTW, 20% VRPL
-# problem_type can be CVRP, OVRP, VRPB, VRPTW, VRPL and their any combinations, e.g., OVRPBLTW
+
 env_params = {
     'problem_type': 'unified', 
     'problem_size': 50,
@@ -46,6 +43,9 @@ model_params = {
     'logit_clipping': 10,
     'ff_hidden_dim': 512,
     'eval_type': 'argmax',
+
+    # 🆕 add this: number of tasks in the unified setup (CVRP, OVRP, VRPB, VRPTW, VRPL)
+    'num_tasks': 5,
 }
 
 optimizer_params = {
@@ -56,6 +56,10 @@ optimizer_params = {
     'scheduler': {
         'milestones': [8001, 8051],
         'gamma': 0.1
+    },
+    # 🆕 Add a separate discriminator optimizer config (optional)
+    'discriminator_optimizer': {
+        'lr': 1e-4
     }
 }
 
@@ -79,16 +83,17 @@ trainer_params = {
         },
     },
     'model_load': {
-        'enable': False,  # enable loading pre-trained model
-        # 'path': './result/saved_unified50_model',  # directory path of pre-trained model and log files saved.
-        # 'epoch': 2000,  # epoch version of pre-trained model to laod.
+        'enable': False,
+    },
 
-    }
+    # 🆕 Adversarial training parameters
+    'lambda_adv': 0.3,   # strength of adversarial term
+    'disc_steps': 1,     # discriminator steps per batch
 }
 
 logger_params = {
     'log_file': {
-        'desc': 'train_'+env_params['problem_type']+'_n'+str(env_params['problem_size'])+'_with_instNorm',
+        'desc': 'train_'+env_params['problem_type']+'_n'+str(env_params['problem_size'])+'_adv',
         'filename': 'run_log'
     }
 }
@@ -110,7 +115,6 @@ def main():
                       trainer_params=trainer_params)
 
     copy_all_src(trainer.result_folder)
-
     trainer.run()
 
 
@@ -126,7 +130,6 @@ def _print_config():
     logger.info('DEBUG_MODE: {}'.format(DEBUG_MODE))
     logger.info('USE_CUDA: {}, CUDA_DEVICE_NUM: {}'.format(USE_CUDA, CUDA_DEVICE_NUM))
     [logger.info(g_key + "{}".format(globals()[g_key])) for g_key in globals().keys() if g_key.endswith('params')]
-
 
 
 ##########################################################################################
