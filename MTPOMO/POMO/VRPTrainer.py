@@ -31,7 +31,6 @@ class VRPTrainer:
 
         # cuda
         USE_CUDA = self.trainer_params['use_cuda']
-        USE_CUDA = 0
         if USE_CUDA:
             cuda_device_num = self.trainer_params['cuda_device_num']
             torch.cuda.set_device(cuda_device_num)
