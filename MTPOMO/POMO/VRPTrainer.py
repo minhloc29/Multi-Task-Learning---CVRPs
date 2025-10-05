@@ -1,7 +1,7 @@
 
 import torch
 from logging import getLogger
-
+import torch.nn.functional as F
 from VRPEnv import VRPEnv as Env
 from VRPModel import VRPModel as Model
 
@@ -10,6 +10,20 @@ from torch.optim.lr_scheduler import MultiStepLR as Scheduler
 
 from utils.utils import *
 
+from torch.autograd import Function
+
+class GradReverse(Function):
+    @staticmethod
+    def forward(ctx, x, lambd=1.0):
+        ctx.lambd = lambd
+        return x.view_as(x)
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.neg() * ctx.lambd, None
+
+def grad_reverse(x, lambd=1.0):
+    return GradReverse.apply(x, lambd)
 
 class VRPTrainer:
     def __init__(self,
@@ -31,6 +45,7 @@ class VRPTrainer:
 
         # cuda
         USE_CUDA = self.trainer_params['use_cuda']
+        USE_CUDA = 0
         if USE_CUDA:
             cuda_device_num = self.trainer_params['cuda_device_num']
             torch.cuda.set_device(cuda_device_num)
@@ -158,47 +173,56 @@ class VRPTrainer:
 
     def _train_one_batch(self, batch_size):
 
-        # Prep
-        ###############################################
         self.model.train()
         self.env.load_problems(batch_size)
-        reset_state, _, _ = self.env.reset()
-        # What is reset_state
+        reset_state, task_labels, _ = self.env.reset()  # <- provide task_labels here
         self.model.pre_forward(reset_state)
+        encoded_nodes = self.model.encoded_nodes  # shared embeddings (batch, problem+1, embedding)
 
-        prob_list = torch.zeros(size=(batch_size, self.env.pomo_size, 0))
-        # shape: (batch, pomo, 0~problem)
-
-        # POMO Rollout
         ###############################################
+        # --- 1. Forward rollout as usual (VRP loss)
+        ###############################################
+        prob_list = torch.zeros(size=(batch_size, self.env.pomo_size, 0))
         state, reward, done = self.env.pre_step()
-
         while not done:
             selected, prob = self.model(state)
-            # shape: (batch, pomo)
             state, reward, done = self.env.step(selected)
             prob_list = torch.cat((prob_list, prob[:, :, None]), dim=2)
 
-        # Loss
-        ###############################################
-        # reward_mean = reward.float().mean(dim=1, keepdims=True)
-        # advantage = torch.div((reward - reward_mean),-reward_mean) # normalize different probelms have different level of rewards
         advantage = reward - reward.float().mean(dim=1, keepdims=True)
-        # shape: (batch, pomo)
         log_prob = prob_list.log().sum(dim=2)
-        # size = (batch, pomo)
-        loss = -advantage * log_prob  # Minus Sign: To Increase REWARD
-        # shape: (batch, pomo)
-        loss_mean = loss.mean()
+        loss_vrp = (-advantage * log_prob).mean()
 
-        # Score
         ###############################################
-        max_pomo_reward, _ = reward.max(dim=1)  # get best results from pomo
-        score_mean = -max_pomo_reward.float().mean()  # negative sign to make positive value
+        # --- 2. Adversarial Task Loss
+        ###############################################
+        # Forward through discriminator
+        task_logits = self.model.discriminator(encoded_nodes.detach())  # detach to train D
+        loss_task = F.cross_entropy(task_logits, task_labels)
 
-        # Step & Return
+        # Backprop for discriminator only
+        self.model.discriminator.zero_grad()
+        loss_task.backward()
+        self.optimizer.step()  # separate optimizer if needed
+        self.optimizer.zero_grad()
+
         ###############################################
+        # --- 3. Encoder adversarial update
+        ###############################################
+        # reverse gradient from discriminator
+        reversed_embed = grad_reverse(encoded_nodes, lambd=0.1)
+        task_logits_adv = self.model.discriminator(reversed_embed)
+        loss_adv = F.cross_entropy(task_logits_adv, task_labels)
+
+        loss_total = loss_vrp - 0.1 * loss_adv  # adversarial objective
+
         self.model.zero_grad()
-        loss_mean.backward()
+        loss_total.backward()
         self.optimizer.step()
-        return score_mean.item(), loss_mean.item()
+
+        ###############################################
+        # --- 4. Score Logging
+        ###############################################
+        max_pomo_reward, _ = reward.max(dim=1)
+        score_mean = -max_pomo_reward.float().mean()
+        return score_mean.item(), loss_total.item()

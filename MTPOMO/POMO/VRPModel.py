@@ -19,12 +19,18 @@ class TaskDiscriminator(nn.Module): # put this after encoder step
     
 class VRPModel(nn.Module):
 
-    def __init__(self, **model_params):
+    def __init__(self, num_tasks=5, **model_params):
         super().__init__()
         self.model_params = model_params
 
         self.encoder = VRP_Encoder(**model_params)
         self.decoder = VRP_Decoder(**model_params)
+        self.discriminator = TaskDiscriminator(
+            embedding_dim=model_params['embedding_dim'],
+            num_tasks=num_tasks
+        )
+
+
         self.encoded_nodes = None
         # shape: (batch, problem+1, EMBEDDING_DIM)
 
@@ -50,7 +56,7 @@ class VRPModel(nn.Module):
         # shape: (batch, problem+1, embedding)
         self.decoder.set_kv(self.encoded_nodes)
 
-    def forward(self, state):
+    def forward(self, state, task_labels=None, adversarial=False):  
         batch_size = state.BATCH_IDX.size(0)
         pomo_size = state.BATCH_IDX.size(1)
 
@@ -98,6 +104,15 @@ class VRPModel(nn.Module):
                 selected = probs.argmax(dim=2)
                 # shape: (batch, pomo)
                 prob = None  # value not needed. Can be anything.
+
+        if task_labels is not None:
+            if adversarial:
+                enc_for_disc = self.encoded_nodes.detach()   # freeze encoder
+            else:
+                enc_for_disc = self.encoded_nodes            # encoder trains to fool
+            task_logits = self.discriminator(enc_for_disc)
+        else:
+            task_logits = None
 
         return selected, prob
 
