@@ -1,0 +1,8 @@
+[2025-10-06 10:06:53] train_n50.py(154) : DEBUG_MODE: False
+[2025-10-06 10:06:53] train_n50.py(155) : USE_CUDA: True, CUDA_DEVICE_NUM: 0
+[2025-10-06 10:06:53] train_n50.py(159) : env_params: {'problem_type': 'unified', 'problem_size': 50, 'pomo_size': 50}
+[2025-10-06 10:06:53] train_n50.py(159) : model_params: {'embedding_dim': 128, 'sqrt_embedding_dim': 11.313708498984761, 'encoder_layer_num': 6, 'qkv_dim': 16, 'head_num': 8, 'logit_clipping': 10, 'ff_hidden_dim': 512, 'eval_type': 'argmax', 'num_tasks': 5}
+[2025-10-06 10:06:53] train_n50.py(159) : optimizer_params: {'optimizer': {'lr': 0.0001, 'weight_decay': 1e-06}, 'scheduler': {'milestones': [8001, 8051], 'gamma': 0.1}, 'discriminator_optimizer': {'lr': 0.0001}}
+[2025-10-06 10:06:53] train_n50.py(159) : trainer_params: {'use_cuda': True, 'cuda_device_num': 0, 'epochs': 10000, 'train_episodes': 10000, 'train_batch_size': 32, 'prev_model_path': None, 'logging': {'model_save_interval': 100, 'img_save_interval': 100, 'log_image_params_1': {'json_foldername': 'log_image_style', 'filename': 'style_unified_100.json'}, 'log_image_params_2': {'json_foldername': 'log_image_style', 'filename': 'style_loss_1.json'}}, 'model_load': {'enable': False}, 'lambda_adv': 0.3, 'disc_steps': 1}
+[2025-10-06 10:06:53] train_n50.py(159) : logger_params: {'log_file': {'desc': 'train_unified_n50_adv', 'filename': 'run_log', 'filepath': './result/20251006_120652_train_unified_n50_adv'}}
+[2025-10-06 10:06:54] VRPTrainer.py(94) : =================================================================

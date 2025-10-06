@@ -58,8 +58,18 @@ class VRPTrainer:
         # Main Components
         self.model = Model(**self.model_params)
         self.env = Env(**self.env_params)
-        self.optimizer = Optimizer(self.model.parameters(), **self.optimizer_params['optimizer'])
-        self.scheduler = Scheduler(self.optimizer, **self.optimizer_params['scheduler'])
+
+        self.optimizer_main = Optimizer(
+            list(self.model.encoder.parameters()) + list(self.model.decoder.parameters()),
+            **self.optimizer_params['optimizer']
+        )
+
+        self.optimizer_disc = Optimizer(
+            self.model.discriminator.parameters(),
+            **self.optimizer_params['discriminator_optimizer']
+        )
+
+        self.scheduler = Scheduler(self.optimizer_main, **self.optimizer_params['scheduler'])
 
         # Restore
         self.start_epoch = 1
@@ -172,16 +182,15 @@ class VRPTrainer:
         return score_AM.avg, loss_AM.avg
 
     def _train_one_batch(self, batch_size):
-
         self.model.train()
         self.env.load_problems(batch_size)
-        reset_state, task_labels, _ = self.env.reset()  # <- provide task_labels here
+        reset_state, task_labels, _ = self.env.reset()  # provide task_labels
         self.model.pre_forward(reset_state)
         encoded_nodes = self.model.encoded_nodes  # shared embeddings (batch, problem+1, embedding)
 
-        ###############################################
-        # --- 1. Forward rollout as usual (VRP loss)
-        ###############################################
+        #########################################################
+        # 1️⃣ VRP Forward Rollout (same as before)
+        #########################################################
         prob_list = torch.zeros(size=(batch_size, self.env.pomo_size, 0))
         state, reward, done = self.env.pre_step()
         while not done:
@@ -193,36 +202,46 @@ class VRPTrainer:
         log_prob = prob_list.log().sum(dim=2)
         loss_vrp = (-advantage * log_prob).mean()
 
-        ###############################################
-        # --- 2. Adversarial Task Loss
-        ###############################################
-        # Forward through discriminator
-        task_logits = self.model.discriminator(encoded_nodes.detach())  # detach to train D
-        loss_task = F.cross_entropy(task_logits, task_labels)
+        #########################################################
+        # 2️⃣ Train the Task Discriminator (frozen encoder)
+        #########################################################
+        self.model.discriminator.train()
+        self.model.encoder.eval()  # freeze encoder
+        self.optimizer_disc.zero_grad()
 
-        # Backprop for discriminator only
-        self.model.discriminator.zero_grad()
-        loss_task.backward()
-        self.optimizer.step()  # separate optimizer if needed
-        self.optimizer.zero_grad()
+        with torch.no_grad():
+            enc_detached = encoded_nodes.detach()
+        logits_disc = self.model.discriminator(enc_detached)
+        loss_disc = F.cross_entropy(logits_disc, task_labels)
 
-        ###############################################
-        # --- 3. Encoder adversarial update
-        ###############################################
-        # reverse gradient from discriminator
-        reversed_embed = grad_reverse(encoded_nodes, lambd=0.1)
-        task_logits_adv = self.model.discriminator(reversed_embed)
-        loss_adv = F.cross_entropy(task_logits_adv, task_labels)
+        loss_disc.backward()
+        self.optimizer_disc.step()
 
-        loss_total = loss_vrp - 0.1 * loss_adv  # adversarial objective
+        #########################################################
+        # 3️⃣ Train Encoder Adversarially + Decoder for VRP
+        #########################################################
+        self.model.encoder.train()
+        self.optimizer_main.zero_grad()
 
-        self.model.zero_grad()
+        # Re-encode to get fresh embeddings
+        self.model.pre_forward(reset_state)
+        enc = self.model.encoded_nodes
+
+        # Reverse gradients for adversarial learning
+        enc_reversed = grad_reverse(enc, lambd=self.trainer_params['lambda_adv'])
+        logits_adv = self.model.discriminator(enc_reversed)
+        loss_adv = F.cross_entropy(logits_adv, task_labels)
+
+        # Combine losses
+        loss_total = loss_vrp + self.trainer_params['lambda_adv'] * loss_adv
+
         loss_total.backward()
-        self.optimizer.step()
+        self.optimizer_main.step()
 
-        ###############################################
-        # --- 4. Score Logging
-        ###############################################
+        #########################################################
+        # 4️⃣ Logging
+        #########################################################
         max_pomo_reward, _ = reward.max(dim=1)
         score_mean = -max_pomo_reward.float().mean()
+
         return score_mean.item(), loss_total.item()

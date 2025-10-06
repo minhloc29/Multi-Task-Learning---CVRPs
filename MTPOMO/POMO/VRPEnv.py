@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 import torch
 
@@ -8,55 +7,134 @@ from VRProblemDef import get_random_problems_mixed, augment_xy_data_by_8_fold
 @dataclass
 class Reset_State:
     depot_xy: torch.Tensor = None
+    # shape: (batch, 1, 2)
     node_xy: torch.Tensor = None
+    # shape: (batch, problem, 2)
     node_demand: torch.Tensor = None
+    # shape: (batch, problem)
     node_earlyTW: torch.Tensor = None
+    # shape: (batch, problem)
     node_lateTW: torch.Tensor = None
-    task_label: torch.Tensor = None  # 🧩 NEW: identifies which VRP type this sample belongs to
-
+    # shape: (batch, problem)
+    # route_open: torch.Tensor = None
+    # # shape: (batch, problem)
+    # length: torch.Tensor = None
+    # # shape: (batch, problem)
 
 
 @dataclass
 class Step_State:
     BATCH_IDX: torch.Tensor = None
     POMO_IDX: torch.Tensor = None
+    # shape: (batch, pomo)
     selected_count: int = None
     load: torch.Tensor = None
+    # shape: (batch, pomo)
     time: torch.Tensor = None
+    # shape: (batch, pomo)
     route_open: torch.Tensor = None
+    # shape: (batch, pomo)
     length: torch.Tensor = None
+    # shape: (batch, pomo)
+    
     current_node: torch.Tensor = None
+    # shape: (batch, pomo)
     ninf_mask: torch.Tensor = None
+    # shape: (batch, pomo, problem+1)
     finished: torch.Tensor = None
+    # shape: (batch, pomo)
 
 
 class VRPEnv:
     def __init__(self, **env_params):
 
+        # Const @INIT
+        ####################################
         self.env_params = env_params
         self.problem_size = env_params['problem_size']
         self.pomo_size = env_params['pomo_size']
         self.problem_type = env_params['problem_type']
 
         self.FLAG__use_saved_problems = False
+        self.saved_depot_xy = None
+        self.saved_node_xy = None
+        self.saved_node_demand = None
         self.saved_index = None
 
-        # attributes (CVRP, OVRP, VRPB, VRPTW, VRPL)
+        # Const @Load_Problem
+        ####################################
+        self.batch_size = None
+        self.BATCH_IDX = None
+        self.POMO_IDX = None
+        # IDX.shape: (batch, pomo)
+        self.depot_node_xy = None
+        # shape: (batch, problem+1, 2)
+        self.depot_node_demand = None
+        # shape: (batch, problem+1)
+        self.depot_node_earlyTW = None
+        # shape: (batch, problem+1)
+        self.depot_node_lateTW = None
+        # shape: (batch, problem+1)
+        self.depot_node_servicetime = None
+        # shape: (batch, problem+1)
+        self.length = None
+        # shape: (batch, pomo)
+
+        ##################################
         self.attribute_c = False
         self.attribute_tw = False
         self.attribute_o = False
-        self.attribute_b = False
+        self.attribute_b = False # currently regard as CVRP with negative demand 
         self.attribute_l = False
 
-        # state placeholders
+
+        # Dynamic-1
+        ####################################
+        self.selected_count = None
+        self.current_node = None
+        # shape: (batch, pomo)
+        self.selected_node_list = None
+        # shape: (batch, pomo, 0~)
+
+        # Dynamic-2
+        ####################################
+        self.at_the_depot = None
+        # shape: (batch, pomo)
+        self.load = None
+        # shape: (batch, pomo)
+        self.time = None
+        # shape: (batch, pomo)
+        self.route_open= None
+        # shape: (batch, pomo)
+        self.length= None
+        # shape: (batch, pomo)
+        self.visited_ninf_flag = None
+        # shape: (batch, pomo, problem+1)
+        self.ninf_mask = None
+        # shape: (batch, pomo, problem+1)
+        self.finished = None
+        # shape: (batch, pomo)
+
+        # states to return
+        ####################################
         self.reset_state = Reset_State()
         self.step_state = Step_State()
+        self.task_label = None   # <--- NEW
 
-    # =====================================================================================
-    # Dataset loading
-    # =====================================================================================
+    def _get_task_label(self):
+        """Convert problem type string to numeric label."""
+        mapping = {
+            "CVRP": 0,
+            "CVRPTW": 1,
+            "OVRP": 2,
+            "MDVRP": 3,
+            "SDVRP": 4
+        }
+        return mapping.get(self.problem_type.upper(), 0)
+    
     def use_saved_problems(self, filename, device):
         self.FLAG__use_saved_problems = True
+
         loaded_dict = torch.load(filename, map_location=device)
         self.saved_depot_xy = loaded_dict['depot_xy']
         self.saved_node_xy = loaded_dict['node_xy']
@@ -68,15 +146,11 @@ class VRPEnv:
         self.saved_route_length = loaded_dict['route_length_limit']
         self.saved_index = 0
 
-    # =====================================================================================
-    # Generate or load a batch of problems
-    # =====================================================================================
     def load_problems(self, batch_size, aug_factor=1):
         self.batch_size = batch_size
 
         if not self.FLAG__use_saved_problems:
-            depot_xy, node_xy, node_demand, node_earlyTW, node_lateTW, node_servicetime, route_open, route_length_limit = \
-                get_random_problems_mixed(batch_size, self.problem_size, self.problem_type)
+            depot_xy, node_xy, node_demand, node_earlyTW, node_lateTW, node_servicetime, route_open, route_length_limit = get_random_problems_mixed(batch_size, self.problem_size, self.problem_type)
         else:
             depot_xy = self.saved_depot_xy[self.saved_index:self.saved_index+batch_size]
             node_xy = self.saved_node_xy[self.saved_index:self.saved_index+batch_size]
@@ -88,62 +162,106 @@ class VRPEnv:
             route_length_limit = self.saved_route_length[self.saved_index:self.saved_index+batch_size]
             self.saved_index += batch_size
 
-        if aug_factor == 8:
-            self.batch_size *= 8
-            depot_xy = augment_xy_data_by_8_fold(depot_xy)
-            node_xy = augment_xy_data_by_8_fold(node_xy)
-            node_demand = node_demand.repeat(8, 1)
-            node_earlyTW = node_earlyTW.repeat(8, 1)
-            node_lateTW = node_lateTW.repeat(8, 1)
-            node_servicetime = node_servicetime.repeat(8, 1)
-            route_open = route_open.repeat(8, 1)
-            route_length_limit = route_length_limit.repeat(8, 1)
+        if aug_factor > 1:
+            if aug_factor == 8:
+                self.batch_size = self.batch_size * 8
+                depot_xy = augment_xy_data_by_8_fold(depot_xy)
+                node_xy = augment_xy_data_by_8_fold(node_xy)
+                node_demand = node_demand.repeat(8, 1)
+                node_earlyTW= node_earlyTW.repeat(8,1)
+                node_lateTW = node_lateTW.repeat(8,1)
+                node_servicetime = node_servicetime.repeat(8,1)
+                route_open = route_open.repeat(8,1)
+                route_length_limit = route_length_limit.repeat(8,1)
+            else:
+                raise NotImplementedError
+        
+        self.route_open = route_open
+        # shape: (batch,pomo)
+        self.length = route_length_limit
+        # shape: (batch,pomo)
 
-        # --- Detect which attributes are active to assign task type -----------------------
-        has_demand = (node_demand.sum(dim=1) > 0).float()
-        has_tw = (node_lateTW.sum(dim=1) > 0).float()
-        has_open = (route_open.sum(dim=1) > 0).float()
-        has_limit = (route_length_limit.sum(dim=1) > 0).float()
+        self.depot_node_xy = torch.cat((depot_xy, node_xy), dim=1)
+        # shape: (batch, problem+1, 2)
+        depot_demand = torch.zeros(size=(self.batch_size, 1))
+        # shape: (batch, 1)
+        self.depot_node_demand = torch.cat((depot_demand, node_demand), dim=1)
+        # shape: (batch, problem+1)
 
-        # Assign task labels based on which features are active
-        # 0: CVRP, 1: OVRP, 2: VRPB, 3: VRPTW, 4: VRPL
-        # you can modify this mapping based on your dataset generation
-        task_labels = torch.zeros(batch_size, dtype=torch.long)
-        task_labels[has_open.bool()] = 1
-        task_labels[(has_demand < 0).bool()] = 2  # VRPB (negative demand)
-        task_labels[has_tw.bool()] = 3
-        task_labels[has_limit.bool()] = 4
+        depot_earlyTW = torch.zeros(size=(self.batch_size, 1))
+        # shape: (batch, 1)
+        depot_lateTW = 4.6*torch.ones(size=(self.batch_size, 1)) # the lenght of time windows should be normalized into [0,1] not 4.6
+        # shape: (batch, 1)
+        depot_servicetime = torch.zeros(size=(self.batch_size, 1))
+        # shape: (batch, 1)
+        self.depot_node_earlyTW = torch.cat((depot_earlyTW, node_earlyTW), dim=1)
+        # shape: (batch, problem+1)
+        self.depot_node_lateTW = torch.cat((depot_lateTW, node_lateTW), dim=1)
+        # shape: (batch, problem+1)
+        self.depot_node_servicetime = torch.cat((depot_servicetime, node_servicetime), dim=1)
+        # shape: (batch, problem+1)
 
-        self.reset_state.task_label = task_labels
-        # shape: (batch,)
+        self.BATCH_IDX = torch.arange(self.batch_size)[:, None].expand(self.batch_size, self.pomo_size)
+        self.POMO_IDX = torch.arange(self.pomo_size)[None, :].expand(self.batch_size, self.pomo_size)
 
-        # Store base tensors for downstream steps
         self.reset_state.depot_xy = depot_xy
         self.reset_state.node_xy = node_xy
         self.reset_state.node_demand = node_demand
         self.reset_state.node_earlyTW = node_earlyTW
         self.reset_state.node_lateTW = node_lateTW
+        
 
-    # =====================================================================================
-    # Reset and step functions
-    # =====================================================================================
+        self.step_state.BATCH_IDX = self.BATCH_IDX
+        self.step_state.POMO_IDX = self.POMO_IDX
+
+        label_int = self._get_task_label()
+        self.task_label = torch.full((self.batch_size,), label_int, dtype=torch.long)
+
+        if (node_demand.sum()>0):
+            self.attribute_c = True
+        else:
+            self.attribute_c = False
+        if (node_lateTW.sum()>0):
+            self.attribute_tw = True
+        else:
+            self.attribute_tw = False
+        if (route_open.sum()>0):
+            self.attribute_o = True
+        else:
+            self.attribute_o = False
+        if (route_length_limit.sum()>0):
+            self.attribute_l = True
+        else:
+            self.attribute_l = False
+
+
     def reset(self):
         self.selected_count = 0
         self.current_node = None
+        # shape: (batch, pomo)
         self.selected_node_list = torch.zeros((self.batch_size, self.pomo_size, 0), dtype=torch.long)
+        # shape: (batch, pomo, 0~)
 
         self.at_the_depot = torch.ones(size=(self.batch_size, self.pomo_size), dtype=torch.bool)
+        # shape: (batch, pomo)
         self.load = torch.ones(size=(self.batch_size, self.pomo_size))
+        # shape: (batch, pomo)
         self.time = torch.zeros(size=(self.batch_size, self.pomo_size))
-        self.length = 3.0 * torch.ones(size=(self.batch_size, self.pomo_size))
+        # shape: (batch, pomo)
+        self.length = 3.0*torch.ones(size=(self.batch_size, self.pomo_size))
+        # # shape: (batch, pomo)
         self.route_open = torch.zeros((self.batch_size, self.pomo_size))
-        self.visited_ninf_flag = torch.zeros(size=(self.batch_size, self.pomo_size, self.problem_size + 1))
-        self.ninf_mask = torch.zeros(size=(self.batch_size, self.pomo_size, self.problem_size + 1))
+        # shape: (batch, pomo)
+        self.visited_ninf_flag = torch.zeros(size=(self.batch_size, self.pomo_size, self.problem_size+1))
+        # shape: (batch, pomo, problem+1)
+        self.ninf_mask = torch.zeros(size=(self.batch_size, self.pomo_size, self.problem_size+1))
+        # shape: (batch, pomo, problem+1)
         self.finished = torch.zeros(size=(self.batch_size, self.pomo_size), dtype=torch.bool)
+        # shape: (batch, pomo)
 
         reward = None
         done = False
-        return self.reset_state, reward, done
+        return self.reset_state, self.task_label, done
 
     def pre_step(self):
         self.step_state.selected_count = self.selected_count

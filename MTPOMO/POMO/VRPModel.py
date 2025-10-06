@@ -3,20 +3,40 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class GradientReversalFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x.view_as(x)
 
-class TaskDiscriminator(nn.Module): # put this after encoder step
-    def __init__(self, embedding_dim, hidden=128, num_tasks=5):
+    @staticmethod
+    def backward(ctx, grad_output):
+        return -ctx.lambda_ * grad_output, None
+
+
+class GradientReversal(torch.nn.Module):
+    def __init__(self, lambda_=1.0):
         super().__init__()
+        self.lambda_ = lambda_
+
+    def forward(self, x):
+        return GradientReversalFunction.apply(x, self.lambda_)
+
+class TaskDiscriminator(nn.Module):
+    def __init__(self, embedding_dim, hidden=128, num_tasks=5, lambda_=1.0):
+        super().__init__()
+        self.grl = GradientReversal(lambda_)
         self.net = nn.Sequential(
             nn.Linear(embedding_dim, hidden),
             nn.ReLU(),
             nn.Linear(hidden, num_tasks)
         )
-    def forward(self, enc):
-        # enc: (batch, problem+1, embedding)
+
+    def forward(self, enc, reverse=False):
         pooled = enc.mean(dim=1)  # [batch, embedding]
-        return self.net(pooled)   # [batch, num_tasks]
-    
+        if reverse:
+            pooled = self.grl(pooled)
+        return self.net(pooled)  # [batch, num_tasks]
 class VRPModel(nn.Module):
 
     def __init__(self, num_tasks=5, **model_params):
@@ -56,66 +76,76 @@ class VRPModel(nn.Module):
         # shape: (batch, problem+1, embedding)
         self.decoder.set_kv(self.encoded_nodes)
 
-    def forward(self, state, task_labels=None, adversarial=False):  
+    def forward(self, state, task_labels=None, adversarial=False):
+        """
+        Forward pass for VRP model with adversarial task discriminator.
+        Handles initialization when state indices are None (first step).
+        """
+
+        # --- Handle uninitialized state (first move) ---
+        if state.BATCH_IDX is None or state.POMO_IDX is None:
+            batch_size = self.encoded_nodes.size(0)
+            pomo_size = self.encoded_nodes.size(1) - 1  # exclude depot
+            selected = torch.zeros(size=(batch_size, pomo_size), dtype=torch.long)
+            prob = torch.ones(size=(batch_size, pomo_size))
+            return selected, prob
+
+        # --- Normal state ---
         batch_size = state.BATCH_IDX.size(0)
         pomo_size = state.BATCH_IDX.size(1)
 
-
-        if state.selected_count == 0:  # First Move, depot
+        if state.selected_count == 0:
+            # First move: start from depot
             selected = torch.zeros(size=(batch_size, pomo_size), dtype=torch.long)
             prob = torch.ones(size=(batch_size, pomo_size))
 
-            # # Use Averaged encoded nodes for decoder input_1
-            # encoded_nodes_mean = self.encoded_nodes.mean(dim=1, keepdim=True)
-            # # shape: (batch, 1, embedding)
-            # self.decoder.set_q1(encoded_nodes_mean)
-
-            # # Use encoded_depot for decoder input_2
-            # encoded_first_node = self.encoded_nodes[:, [0], :]
-            # # shape: (batch, 1, embedding)
-            # self.decoder.set_q2(encoded_first_node)
-
-        elif state.selected_count == 1:  # Second Move, POMO
-            selected = torch.arange(start=1, end=pomo_size+1)[None, :].expand(batch_size, pomo_size)
+        elif state.selected_count == 1:
+            # Second move: assign unique starting nodes
+            selected = torch.arange(start=1, end=pomo_size + 1)[None, :].expand(batch_size, pomo_size)
             prob = torch.ones(size=(batch_size, pomo_size))
 
         else:
+            # --- Get embeddings of last selected nodes ---
             encoded_last_node = _get_encoding(self.encoded_nodes, state.current_node)
             # shape: (batch, pomo, embedding)
 
-            probs = self.decoder(encoded_last_node, state.load, state.time,state.length,state.route_open, ninf_mask=state.ninf_mask)
+            # --- Decoder computes route probabilities ---
+            probs = self.decoder(
+                encoded_last_node,
+                state.load,
+                state.time,
+                state.length,
+                state.route_open,
+                ninf_mask=state.ninf_mask
+            )
             # shape: (batch, pomo, problem+1)
-            #print(probs.shape)
 
             if self.training or self.model_params['eval_type'] == 'softmax':
-                while True:  # to fix pytorch.multinomial bug on selecting 0 probability elements
+                while True:  # Avoid PyTorch multinomial zero-probability issue
                     with torch.no_grad():
-                        # print(probs.reshape(batch_size * pomo_size, -1))
-                        # print("current time = ",state.time," mask= ",state.ninf_mask)
                         selected = probs.reshape(batch_size * pomo_size, -1).multinomial(1) \
                             .squeeze(dim=1).reshape(batch_size, pomo_size)
-                    # shape: (batch, pomo)
                     prob = probs[state.BATCH_IDX, state.POMO_IDX, selected].reshape(batch_size, pomo_size)
-                    # shape: (batch, pomo)
                     if (prob != 0).all():
                         break
-
             else:
                 selected = probs.argmax(dim=2)
-                # shape: (batch, pomo)
-                prob = None  # value not needed. Can be anything.
+                prob = None  # Not needed for evaluation
 
+        # --- Adversarial branch (if used) ---
         if task_labels is not None:
+            # Reverse gradient if adversarial
             if adversarial:
-                enc_for_disc = self.encoded_nodes.detach()   # freeze encoder
+                enc_for_disc = self.encoded_nodes.detach()  # freeze encoder for discriminator training
             else:
-                enc_for_disc = self.encoded_nodes            # encoder trains to fool
+                enc_for_disc = self.encoded_nodes  # allow gradient to flow for encoder training
+
+            # Pass shared embeddings to task discriminator
             task_logits = self.discriminator(enc_for_disc)
         else:
             task_logits = None
 
         return selected, prob
-
 
 def _get_encoding(encoded_nodes, node_index_to_pick):
     # encoded_nodes.shape: (batch, problem, embedding)
@@ -142,73 +172,99 @@ class VRP_Encoder(nn.Module):
     def __init__(self, **model_params):
         super().__init__()
         self.model_params = model_params
-        embedding_dim = self.model_params['embedding_dim']
-        encoder_layer_num = self.model_params['encoder_layer_num']
+        embedding_dim = model_params['embedding_dim']
+        encoder_layer_num = model_params['encoder_layer_num']
+        heads = model_params.get('head_num', 4)
+        dropout = model_params.get('dropout', 0.1)
 
+        # Node feature embeddings
         self.embedding_depot = nn.Linear(2, embedding_dim)
         self.embedding_node = nn.Linear(5, embedding_dim)
-        
-        self.layers = nn.ModuleList([EncoderLayer(**model_params) for _ in range(encoder_layer_num)])
 
-    def forward(self, depot_xy, node_xy_demand_TW):
-        # depot_xy.shape: (batch, 1, 2)
-        # node_xy_demand.shape: (batch, problem, 3)
+        # Stack multiple GAT layers
+        self.layers = nn.ModuleList([
+            GraphAttentionLayer(
+                in_dim=embedding_dim,
+                out_dim=embedding_dim,
+                heads=heads,
+                dropout=dropout
+            )
+            for _ in range(encoder_layer_num)
+        ])
 
-        embedded_depot = self.embedding_depot(depot_xy)
-        # shape: (batch, 1, embedding)
-        embedded_node = self.embedding_node(node_xy_demand_TW)
-        # input shape: (batch, problem, 5)
-        # 5 features are: x_coord, y_coord, demands, earlyTW, lateTW
-        # embedded_node shape: (batch, problem, embedding)
+    def forward(self, depot_xy, node_xy_demand_TW, adj_mask=None):
+        """
+        depot_xy: (batch, 1, 2)
+        node_xy_demand_TW: (batch, problem, 5)
+        adj_mask: (batch, problem+1, problem+1), bool tensor — adjacency (True if connected)
+        """
+        # Embed features
+        depot_emb = self.embedding_depot(depot_xy)
+        node_emb = self.embedding_node(node_xy_demand_TW)
+        x = torch.cat((depot_emb, node_emb), dim=1)  # (batch, problem+1, emb)
 
-        out = torch.cat((embedded_depot, embedded_node), dim=1)
-        # shape: (batch, problem+1, embedding)
+        # Build a fully connected adjacency if none provided
+        if adj_mask is None:
+            N = x.size(1)
+            adj_mask = torch.ones(x.size(0), N, N, dtype=torch.bool, device=x.device)
 
+        # Pass through GAT layers
         for layer in self.layers:
-            out = layer(out)
+            x = layer(x, adj_mask)
 
-        return out
-        # shape: (batch, problem+1, embedding)
+        return x  # (batch, problem+1, embedding)
 
 
-class EncoderLayer(nn.Module):
-    def __init__(self, **model_params):
+class GraphAttentionLayer(nn.Module):
+    def __init__(self, in_dim, out_dim, heads=4, dropout=0.1, leaky=0.2):
         super().__init__()
-        self.model_params = model_params
-        embedding_dim = self.model_params['embedding_dim']
-        head_num = self.model_params['head_num']
-        qkv_dim = self.model_params['qkv_dim']
+        self.heads = heads
+        self.head_dim = out_dim // heads
+        self.concat = True  # concatenate heads
+        self.W = nn.Linear(in_dim, out_dim, bias=False)
+        self.attn = nn.Parameter(torch.Tensor(1, heads, 2 * self.head_dim))
+        self.leakyrelu = nn.LeakyReLU(leaky)
+        self.dropout = nn.Dropout(dropout)
+        self.norm = nn.LayerNorm(out_dim)
 
-        self.Wq = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
-        self.Wk = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
-        self.Wv = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
-        self.multi_head_combine = nn.Linear(head_num * qkv_dim, embedding_dim)
+        nn.init.xavier_uniform_(self.attn)
 
-        self.add_n_normalization_1 = AddAndInstanceNormalization(**model_params)
-        self.feed_forward = FeedForward(**model_params)
-        self.add_n_normalization_2 = AddAndInstanceNormalization(**model_params)
+    def forward(self, x, adj_mask):
+        """
+        x: (batch, N, in_dim)
+        adj_mask: (batch, N, N), bool adjacency matrix (True = neighbor)
+        """
+        B, N, _ = x.shape
+        H, hd = self.heads, self.head_dim
 
-    def forward(self, input1):
-        # input1.shape: (batch, problem+1, embedding)
-        head_num = self.model_params['head_num']
+        # Project node features to multi-head subspaces
+        xW = self.W(x).view(B, N, H, hd)  # (B, N, H, hd)
 
-        q = reshape_by_heads(self.Wq(input1), head_num=head_num)
-        k = reshape_by_heads(self.Wk(input1), head_num=head_num)
-        v = reshape_by_heads(self.Wv(input1), head_num=head_num)
-        # qkv shape: (batch, head_num, problem, qkv_dim)
+        # Compute pairwise attention scores
+        xi = xW.unsqueeze(2).expand(B, N, N, H, hd)
+        xj = xW.unsqueeze(1).expand(B, N, N, H, hd)
+        xcat = torch.cat([xi, xj], dim=-1)  # (B, N, N, H, 2*hd)
 
-        out_concat = multi_head_attention(q, k, v)
-        # shape: (batch, problem, head_num*qkv_dim)
+        # Attention coefficients: a^T [x_i || x_j]
+        e = (xcat * self.attn).sum(dim=-1)  # (B, N, N, H)
+        e = self.leakyrelu(e)
 
-        multi_head_out = self.multi_head_combine(out_concat)
-        # shape: (batch, problem, embedding)
+        # Mask non-edges
+        e = e.masked_fill(~adj_mask.unsqueeze(-1), float('-inf'))
 
-        out1 = self.add_n_normalization_1(input1, multi_head_out)
-        out2 = self.feed_forward(out1)
-        out3 = self.add_n_normalization_2(out1, out2)
+        # Softmax over neighbors
+        alpha = torch.softmax(e, dim=2)  # (B, N, N, H)
+        alpha = self.dropout(alpha)
 
-        return out3
-        # shape: (batch, problem, embedding)
+        # Aggregate messages
+        xj = xW.unsqueeze(1).expand(B, N, N, H, hd)
+        out = (alpha.unsqueeze(-1) * xj).sum(dim=2)  # (B, N, H, hd)
+        out = out.reshape(B, N, H * hd)
+
+        # Residual connection + normalization
+        out = self.norm(out + self.W(x))
+
+        return F.elu(out)
 
 
 ########################################

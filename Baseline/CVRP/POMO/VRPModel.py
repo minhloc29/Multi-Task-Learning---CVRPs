@@ -2,6 +2,16 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F      
+from torch_geometric.nn import GCNConv
+
+def build_fully_connected_edge_index(num_nodes):
+    # num_nodes = problem + 1 (depot + customers)
+    edges = []
+    for i in range(num_nodes):
+        for j in range(num_nodes):
+            if i != j:
+                edges.append([i, j])
+    return torch.tensor(edges, dtype=torch.long).t().contiguous()  # shape (2, E)
 
 class VRPModel(nn.Module):
 
@@ -9,25 +19,26 @@ class VRPModel(nn.Module):
         super().__init__()
         self.model_params = model_params
 
-        self.encoder = VRP_Encoder(**model_params)
+        self.encoder = VRP_GNNEncoder(**model_params)
+
         self.decoder = VRP_Decoder(**model_params)
         self.encoded_nodes = None
         # shape: (batch, problem+1, EMBEDDING_DIM)
 
     def pre_forward(self, reset_state):
-        depot_xy = reset_state.depot_xy
-        # shape: (batch, 1, 2)
-        node_xy = reset_state.node_xy
-        # shape: (batch, problem, 2)
-        node_demand = reset_state.node_demand
-        # shape: (batch, problem)
-        node_xy_demand = torch.cat((node_xy, node_demand[:, :, None]), dim=2)
-        # shape: (batch, problem, 3)
+        depot_xy = reset_state.depot_xy  # (batch, 1, 2)
+        node_xy = reset_state.node_xy    # (batch, problem, 2)
+        node_demand = reset_state.node_demand  # (batch, problem)
 
+        node_xy_demand = torch.cat((node_xy, node_demand[:, :, None]), dim=2)  # (batch, problem, 3)
 
-        self.encoded_nodes = self.encoder(depot_xy, node_xy_demand)
-        # shape: (batch, problem+1, embedding)
+        problem = node_xy.size(1)
+        num_nodes = problem + 1
+        edge_index = build_fully_connected_edge_index(num_nodes)  # (2, E)
+
+        self.encoded_nodes = self.encoder(depot_xy, node_xy_demand, edge_index)
         self.decoder.set_kv(self.encoded_nodes)
+
 
     def forward(self, state, adversarial = False):
         batch_size = state.BATCH_IDX.size(0)
@@ -139,6 +150,47 @@ class VRP_Encoder(nn.Module):
         # shape: (batch, problem+1, embedding)
 
 
+class VRP_GNNEncoder(nn.Module):
+    def __init__(self, **model_params):
+        super().__init__()
+        embedding_dim = model_params['embedding_dim']
+        encoder_layer_num = model_params['encoder_layer_num']
+
+        self.embedding_depot = nn.Linear(2, embedding_dim)  # depot coords
+        self.embedding_node = nn.Linear(3, embedding_dim)   # customer coords + demand
+
+        # GCN layers
+        self.convs = nn.ModuleList([GCNConv(embedding_dim, embedding_dim) for _ in range(encoder_layer_num)])
+
+    def forward(self, depot_xy, node_xy_demand, edge_index, edge_weight=None):
+        """
+        depot_xy: (batch, 1, 2)
+        node_xy_demand: (batch, problem, 3)
+        edge_index: (2, E)
+        edge_weight: (E,) optional
+        """
+
+        batch_size = depot_xy.size(0)
+        problem = node_xy_demand.size(1)
+
+        # Embed depot and customer nodes separately
+        embedded_depot = self.embedding_depot(depot_xy)  # (batch, 1, embedding)
+        embedded_node = self.embedding_node(node_xy_demand)  # (batch, problem, embedding)
+
+        # Concatenate depot + customers
+        node_features = torch.cat((embedded_depot, embedded_node), dim=1)  # (batch, problem+1, embedding)
+
+        # Flatten for GCN processing
+        node_features_flat = node_features.view(-1, node_features.size(2))  # (batch*(problem+1), embedding)
+
+        for conv in self.convs:
+            node_features_flat = conv(node_features_flat, edge_index, edge_weight=edge_weight)
+            node_features_flat = F.relu(node_features_flat)
+
+        # Reshape back to (batch, problem+1, embedding)
+        out = node_features_flat.view(batch_size, problem+1, -1)
+        return out
+    
 class EncoderLayer(nn.Module):
     def __init__(self, **model_params):
         super().__init__()
