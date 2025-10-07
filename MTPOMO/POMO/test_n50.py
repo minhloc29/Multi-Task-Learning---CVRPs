@@ -52,7 +52,7 @@ tester_params = {
     'cuda_device_num': CUDA_DEVICE_NUM,
     'model_load': {
         'path': '../../Trained_models/50',  # directory path of pre-trained model and log files saved.
-        'epoch': 10000,  # epoch version of pre-trained model to laod.
+        'epoch': 100,  # epoch version of pre-trained model to laod.
     },
     'test_episodes': 5000,
     'test_batch_size': 500,
