@@ -62,7 +62,7 @@ optimizer_params = {
 trainer_params = {
     'use_cuda': USE_CUDA,
     'cuda_device_num': CUDA_DEVICE_NUM,
-    'epochs': 10000,
+    'epochs': 100,
     'train_episodes': 10 * 1000,
     'train_batch_size': 32,
     'prev_model_path': None,
