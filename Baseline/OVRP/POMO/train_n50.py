@@ -12,29 +12,9 @@ CUDA_DEVICE_NUM = 0
 import os
 import sys
 
-# --- KHẮC PHỤC TRIỆT ĐỂ LỖI PATH TRÊN KAGGLE/NOTEBOOK ---
-
-# 1. Xác định đường dẫn thư mục hiện tại của script (OVRP/POMO)
-# Lệnh này hoạt động dù bạn chạy bằng 'python' hay trong Notebook cell.
-try:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-except NameError:
-    current_dir = os.getcwd() 
-
-# 2. Thêm THƯ MỤC HIỆN TẠI vào sys.path
-# Mục đích: Cho phép các file cùng cấp (như VRPEnv.py và VRProblemDef.py) nhìn thấy nhau.
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir) # Ưu tiên tìm kiếm các file cùng cấp
-
-# 3. Tính toán và thêm PROJECT ROOT (3 cấp trên)
-# Mục đích: Cho phép tìm kiếm các package top-level (như utils)
-# Vị trí hiện tại của script là .../Baseline/OVRP/POMO/ (3 cấp sâu)
-project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
-
-if project_root not in sys.path:
-    sys.path.insert(1, project_root)
-
-# ------------------------------------------------------------------------------------------
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, "..")  # for problem_def
+sys.path.insert(0, "../..")  # for utils
 
 
 ##########################################################################################
@@ -80,13 +60,13 @@ optimizer_params = {
 trainer_params = {
     'use_cuda': USE_CUDA,
     'cuda_device_num': CUDA_DEVICE_NUM,
-    'epochs': 100,
+    'epochs': 10000,
     'train_episodes': 10 * 1000,
     'train_batch_size': 64,
     'prev_model_path': None,
     'logging': {
-        'model_save_interval': 10,
-        'img_save_interval': 10,
+        'model_save_interval': 100,
+        'img_save_interval': 100,
         'log_image_params_1': {
             'json_foldername': 'log_image_style',
             'filename': 'style_OVRP_50.json'
@@ -124,7 +104,7 @@ def main():
                       optimizer_params=optimizer_params,
                       trainer_params=trainer_params)
 
-    copy_all_src(trainer.result_folder) 
+    copy_all_src(trainer.result_folder)
 
     trainer.run()
 
