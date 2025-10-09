@@ -12,14 +12,27 @@ CUDA_DEVICE_NUM = 0
 import os
 import sys
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "..")  # for problem_def
-sys.path.insert(0, "../..")  # for utils
+# --- BẮT ĐẦU FIX PATH CHO MÔI TRƯỜNG KAGGLE/NOTEBOOK ---
+# Lý do: Đường dẫn tương đối (../..) không hoạt động ổn định khi chạy từ thư mục con.
 
+try:
+    # 1. Lấy đường dẫn tuyệt đối của script đang chạy (Nếu script được gọi bằng lệnh 'python')
+    script_path = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # 2. Nếu chạy trực tiếp trong Notebook cell, dùng thư mục làm việc hiện tại
+    script_path = os.getcwd() 
 
-##########################################################################################
-# import
+# 3. Dựa trên lỗi Traceback, script nằm sâu 3 cấp (POMO, OVRP, Baseline) so với thư mục gốc
+# Chúng ta nhảy ngược lên 3 cấp để tìm đến Project Root chứa thư mục 'utils'
+project_root = os.path.abspath(os.path.join(script_path, '..', '..', '..'))
 
+# 4. Thêm Project Root vào Python Path để Module 'utils' được tìm thấy
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+    # print(f"Added Project Root to Path: {project_root}") # Có thể bỏ comment để debug
+# --- KẾT THÚC FIX PATH ---
+
+# Dòng import không cần thay đổi nếu cấu trúc file là ProjectRoot/utils/utils.py
 import logging
 from utils.utils import create_logger, copy_all_src
 
@@ -104,7 +117,8 @@ def main():
                       optimizer_params=optimizer_params,
                       trainer_params=trainer_params)
 
-    copy_all_src(trainer.result_folder)
+    # Đảm bảo logic copy_all_src hoạt động sau khi trainer.result_folder đã được thiết lập
+    copy_all_src(trainer.result_folder) 
 
     trainer.run()
 
