@@ -12,27 +12,34 @@ CUDA_DEVICE_NUM = 0
 import os
 import sys
 
-# --- BẮT ĐẦU FIX PATH CHO MÔI TRƯỜNG KAGGLE/NOTEBOOK ---
-# Lý do: Đường dẫn tương đối (../..) không hoạt động ổn định khi chạy từ thư mục con.
+# --- KHẮC PHỤC TRIỆT ĐỂ LỖI PATH TRÊN KAGGLE/NOTEBOOK ---
 
+# 1. Xác định đường dẫn thư mục hiện tại của script (OVRP/POMO)
+# Lệnh này hoạt động dù bạn chạy bằng 'python' hay trong Notebook cell.
 try:
-    # 1. Lấy đường dẫn tuyệt đối của script đang chạy (Nếu script được gọi bằng lệnh 'python')
-    script_path = os.path.dirname(os.path.abspath(__file__))
+    current_dir = os.path.dirname(os.path.abspath(__file__))
 except NameError:
-    # 2. Nếu chạy trực tiếp trong Notebook cell, dùng thư mục làm việc hiện tại
-    script_path = os.getcwd() 
+    current_dir = os.getcwd() 
 
-# 3. Dựa trên lỗi Traceback, script nằm sâu 3 cấp (POMO, OVRP, Baseline) so với thư mục gốc
-# Chúng ta nhảy ngược lên 3 cấp để tìm đến Project Root chứa thư mục 'utils'
-project_root = os.path.abspath(os.path.join(script_path, '..', '..', '..'))
+# 2. Thêm THƯ MỤC HIỆN TẠI vào sys.path
+# Mục đích: Cho phép các file cùng cấp (như VRPEnv.py và VRProblemDef.py) nhìn thấy nhau.
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir) # Ưu tiên tìm kiếm các file cùng cấp
 
-# 4. Thêm Project Root vào Python Path để Module 'utils' được tìm thấy
+# 3. Tính toán và thêm PROJECT ROOT (3 cấp trên)
+# Mục đích: Cho phép tìm kiếm các package top-level (như utils)
+# Vị trí hiện tại của script là .../Baseline/OVRP/POMO/ (3 cấp sâu)
+project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
+
 if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-    # print(f"Added Project Root to Path: {project_root}") # Có thể bỏ comment để debug
-# --- KẾT THÚC FIX PATH ---
+    sys.path.insert(1, project_root)
 
-# Dòng import không cần thay đổi nếu cấu trúc file là ProjectRoot/utils/utils.py
+# ------------------------------------------------------------------------------------------
+
+
+##########################################################################################
+# import
+
 import logging
 from utils.utils import create_logger, copy_all_src
 
@@ -117,7 +124,6 @@ def main():
                       optimizer_params=optimizer_params,
                       trainer_params=trainer_params)
 
-    # Đảm bảo logic copy_all_src hoạt động sau khi trainer.result_folder đã được thiết lập
     copy_all_src(trainer.result_folder) 
 
     trainer.run()
