@@ -21,7 +21,7 @@ sys.path.insert(0, "../..")  # for utils
 # import
 
 import logging
-from utils.utils import create_logger, copy_all_src
+from utils.log_image_style.utils import create_logger, copy_all_src
 
 from VRPTrainer import VRPTrainer as Trainer
 
