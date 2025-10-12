@@ -133,17 +133,16 @@ class VRPModel(nn.Module):
                 prob = None  # Not needed for evaluation
 
         # --- Adversarial branch (if used) ---
-        if task_labels is not None:
+        #if task_labels is not None:
             # Reverse gradient if adversarial
-            if adversarial:
-                enc_for_disc = self.encoded_nodes.detach()  # freeze encoder for discriminator training
-            else:
-                enc_for_disc = self.encoded_nodes  # allow gradient to flow for encoder training
+            #if adversarial:
+                #enc_for_disc = self.encoded_nodes.detach()  # freeze encoder for discriminator training
+            ##enc_for_disc = self.encoded_nodes  # allow gradient to flow for encoder training
 
             # Pass shared embeddings to task discriminator
-            task_logits = self.discriminator(enc_for_disc)
-        else:
-            task_logits = None
+            #task_logits = self.discriminator(enc_for_disc)
+        #else:
+           # task_logits = None
 
         return selected, prob
 

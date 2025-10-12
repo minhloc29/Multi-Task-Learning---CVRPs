@@ -68,7 +68,7 @@ class VRPTrainer:
             self.model.discriminator.parameters(),
             **self.optimizer_params['discriminator_optimizer']
         )
-
+        self.optimizer = self.optimizer_main  # THÊM DÒNG NÀY ĐỂ GIẢI QUYẾT LỖ
         self.scheduler = Scheduler(self.optimizer_main, **self.optimizer_params['scheduler'])
 
         # Restore
@@ -206,12 +206,12 @@ class VRPTrainer:
         # 2️⃣ Train the Task Discriminator (frozen encoder)
         #########################################################
         self.model.discriminator.train()
-        self.model.encoder.eval()  # freeze encoder
+        #self.model.encoder.eval()  # freeze encoder
         self.optimizer_disc.zero_grad()
 
         with torch.no_grad():
-            enc_detached = encoded_nodes.detach()
-        logits_disc = self.model.discriminator(enc_detached)
+            enc_detached = self.model.encoded_nodes.detach()
+        logits_disc = self.model.discriminator(enc_detached, reverse = False)
         loss_disc = F.cross_entropy(logits_disc, task_labels)
 
         loss_disc.backward()
@@ -220,16 +220,16 @@ class VRPTrainer:
         #########################################################
         # 3️⃣ Train Encoder Adversarially + Decoder for VRP
         #########################################################
-        self.model.encoder.train()
+        #self.model.encoder.train()
         self.optimizer_main.zero_grad()
-
+        self.model.train()
         # Re-encode to get fresh embeddings
         self.model.pre_forward(reset_state)
-        enc = self.model.encoded_nodes
+        #enc = self.model.encoded_nodes
 
         # Reverse gradients for adversarial learning
-        enc_reversed = grad_reverse(enc, lambd=self.trainer_params['lambda_adv'])
-        logits_adv = self.model.discriminator(enc_reversed)
+        #enc_reversed = grad_reverse(enc, lambd=self.trainer_params['lambda_adv'])
+        logits_adv = self.model.discriminator(self.model.encoded_nodes, reverse=True)
         loss_adv = F.cross_entropy(logits_adv, task_labels)
 
         # Combine losses

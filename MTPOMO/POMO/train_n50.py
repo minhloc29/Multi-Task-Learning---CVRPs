@@ -79,8 +79,8 @@ trainer_params = {
     'train_batch_size': 32,
     'prev_model_path': None,
     'logging': {
-        'model_save_interval': 100,
-        'img_save_interval': 100,
+        'model_save_interval': 2,
+        'img_save_interval': 2,
         'log_image_params_1': {
             'json_foldername': 'log_image_style',
             'filename': 'style_unified_100.json'
@@ -91,11 +91,13 @@ trainer_params = {
         },
     },
     'model_load': {
-        'enable': False,
+        'enable': True,
+        'path': 'result/20251011_232843_train_unified_n50_adv',
+        'epoch':32,
     },
 
     # 🧩 Adversarial training parameters
-    'lambda_adv': 0.3,   # weight for adversarial loss term
+    'lambda_adv': 0.01,   # weight for adversarial loss term
     'disc_steps': 1,     # how many discriminator updates per batch
 }
 
