@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 ########################################
 # GRADIENT REVERSAL LAYER (GRL)
@@ -135,12 +136,19 @@ class VRPModel(nn.Module):
             if self.training or self.model_params['eval_type'] == 'softmax':
                 while True:  # Tránh lỗi zero-probability của multinomial
                     with torch.no_grad():
-                        selected = probs.reshape(batch_size * pomo_size, -1).multinomial(1) \
-                            .squeeze(dim=1).reshape(batch_size, pomo_size)
-                    
-                    # Lấy xác suất của node đã chọn
-                    prob = probs[state.BATCH_IDX, state.POMO_IDX, selected].reshape(batch_size, pomo_size)
-                    
+                      # đảm bảo probs đã được xử lý bên trong decoder (softmax, nan->0, renorm)
+                      probs_flat = probs.reshape(batch_size * pomo_size, -1)
+                      # clamp + renormalize again to be extra-safe
+                      probs_flat = probs_flat.clamp(min=1e-12)
+                      probs_flat = probs_flat / probs_flat.sum(dim=1, keepdim=True)
+
+                      selected_flat = probs_flat.multinomial(1).squeeze(dim=1)
+                      selected = selected_flat.reshape(batch_size, pomo_size)
+
+                    # Lấy xác suất của node đã chọn (an toàn)
+                    prob = probs.gather(dim=2, index=selected.unsqueeze(2)).squeeze(2)
+                    # nếu vẫn có phần tử 0, thay bằng epsilon nhỏ
+                    prob = prob.clamp(min=1e-12)
                     if (prob != 0).all():
                         break
             else:
@@ -320,20 +328,46 @@ class VRP_Decoder(nn.Module):
         score = torch.matmul(mh_atten_out, self.single_head_key)
         # shape: (batch, pomo, problem+1)
 
-        sqrt_embedding_dim = self.model_params['sqrt_embedding_dim']
-        logit_clipping = self.model_params['logit_clipping']
+        # safety guards: prevent division by zero / nan
+        sqrt_embedding_dim = float(self.model_params.get('sqrt_embedding_dim', 1.0))
+        if sqrt_embedding_dim == 0 or torch.isnan(torch.tensor(sqrt_embedding_dim)):
+            sqrt_embedding_dim = 1.0
 
         score_scaled = score / sqrt_embedding_dim
         # shape: (batch, pomo, problem+1)
 
-        score_clipped = logit_clipping * torch.tanh(score_scaled)
+        score_clipped = float(self.model_params.get('logit_clipping', 10.0)) * torch.tanh(score_scaled)
 
+        # add mask (ninf_mask may contain -inf or large negative numbers)
         score_masked = score_clipped + ninf_mask
 
+        # Replace any NaN/inf introduced by mask operations
+        # use a large negative for -inf-like values so softmax ~ 0 there
+        score_masked = torch.nan_to_num(score_masked, nan=-1e9, posinf=1e9, neginf=-1e9)
+
+        # numerical stable softmax: clamp, softmax, then renormalize to avoid all-zero rows
+        # small eps to prevent zero-prob rows
+        EPS = 1e-12
+        # compute softmax
         probs = F.softmax(score_masked, dim=2)
-        # shape: (batch, pomo, problem+1)
+        # replace possible nan/inf after softmax (shouldn't happen, but safe)
+        probs = torch.nan_to_num(probs, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # ensure non-negative and renormalize (row sum > 0)
+        probs = probs.clamp(min=0.0)
+        row_sums = probs.sum(dim=2, keepdim=True)
+        # if some rows sum to zero (all masked), give tiny uniform mass to avoid multinomial error
+        zero_mask = (row_sums <= 0.0)
+        if zero_mask.any():
+            # create tiny uniform mass for those rows
+            uniform = torch.full_like(probs, EPS)
+            probs = torch.where(zero_mask.expand_as(probs), uniform, probs)
+            row_sums = probs.sum(dim=2, keepdim=True)
+
+        probs = probs / (row_sums + EPS)
 
         return probs
+
 
 
 ########################################
@@ -356,11 +390,6 @@ def reshape_by_heads(qkv, head_num):
 
 
 def multi_head_attention(q, k, v, rank2_ninf_mask=None, rank3_ninf_mask=None):
-    # q shape: (batch, head_num, n, key_dim)   : n can be either 1 or PROBLEM_SIZE
-    # k,v shape: (batch, head_num, problem+1, key_dim)
-    # rank2_ninf_mask.shape: (batch, problem+1)
-    # rank3_ninf_mask.shape: (batch, group, problem+1)
-
     batch_s = q.size(0)
     head_num = q.size(1)
     n = q.size(2)
@@ -371,25 +400,42 @@ def multi_head_attention(q, k, v, rank2_ninf_mask=None, rank3_ninf_mask=None):
     score = torch.matmul(q, k.transpose(2, 3))
     # shape: (batch, head_num, n, problem+1)
 
-    score_scaled = score / torch.sqrt(torch.tensor(key_dim, dtype=torch.float))
-    
-    # Áp dụng ninf_mask
+    # avoid zero division / nan in sqrt
+    key_dim_val = float(key_dim) if isinstance(key_dim, int) else float(key_dim.item())
+    if key_dim_val <= 0:
+        key_dim_val = 1.0
+
+    score_scaled = score / math.sqrt(key_dim_val)
+
+    # apply masks if present (they may contain -inf)
     if rank2_ninf_mask is not None:
         score_scaled = score_scaled + rank2_ninf_mask[:, None, None, :].expand(batch_s, head_num, n, input_s)
     if rank3_ninf_mask is not None:
         score_scaled = score_scaled + rank3_ninf_mask[:, None, :, :].expand(batch_s, head_num, n, input_s)
 
+    # sanitize possible inf/nan in score before softmax
+    score_scaled = torch.nan_to_num(score_scaled, nan=-1e9, posinf=1e9, neginf=-1e9)
+
+    # stable softmax on last dim
     weights = nn.Softmax(dim=3)(score_scaled)
-    # shape: (batch, head_num, n, problem+1)
+    weights = torch.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
+    weights = weights.clamp(min=0.0)
+
+    # ensure rows sum > 0
+    row_sum = weights.sum(dim=3, keepdim=True)
+    EPS = 1e-12
+    zero_rows = (row_sum <= 0.0)
+    if zero_rows.any():
+        # distribute tiny uniform prob where necessary
+        tiny = torch.full_like(weights, EPS)
+        weights = torch.where(zero_rows.expand_as(weights), tiny, weights)
+        row_sum = weights.sum(dim=3, keepdim=True)
+
+    weights = weights / (row_sum + EPS)
 
     out = torch.matmul(weights, v)
-    # shape: (batch, head_num, n, key_dim)
-
     out_transposed = out.transpose(1, 2)
-    # shape: (batch, n, head_num, key_dim)
-
     out_concat = out_transposed.reshape(batch_s, n, head_num * key_dim)
-    # shape: (batch, n, head_num*key_dim)
 
     return out_concat
 
