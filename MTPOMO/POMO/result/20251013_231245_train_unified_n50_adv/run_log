@@ -1,0 +1,18 @@
+[2025-10-13 21:12:46] train_n50.py(161) : DEBUG_MODE: False
+[2025-10-13 21:12:46] train_n50.py(162) : USE_CUDA: True, CUDA_DEVICE_NUM: 0
+[2025-10-13 21:12:46] train_n50.py(166) : env_params: {'problem_type': 'unified', 'problem_size': 50, 'pomo_size': 50}
+[2025-10-13 21:12:46] train_n50.py(166) : model_params: {'embedding_dim': 128, 'sqrt_embedding_dim': 11.313708498984761, 'encoder_layer_num': 6, 'qkv_dim': 16, 'head_num': 8, 'logit_clipping': 10, 'ff_hidden_dim': 512, 'eval_type': 'argmax', 'num_tasks': 5}
+[2025-10-13 21:12:46] train_n50.py(166) : optimizer_params: {'optimizer': {'lr': 0.0001, 'weight_decay': 1e-06}, 'scheduler': {'milestones': [8001, 8051], 'gamma': 0.1}, 'discriminator_optimizer': {'lr': 5e-06}}
+[2025-10-13 21:12:46] train_n50.py(166) : trainer_params: {'use_cuda': True, 'cuda_device_num': 0, 'epochs': 100, 'train_episodes': 10000, 'train_batch_size': 32, 'prev_model_path': None, 'logging': {'model_save_interval': 2, 'img_save_interval': 2, 'log_image_params_1': {'json_foldername': 'log_image_style', 'filename': 'style_unified_100.json'}, 'log_image_params_2': {'json_foldername': 'log_image_style', 'filename': 'style_loss_1.json'}}, 'model_load': {'enable': False, 'path': 'result/20251013_201313_train_unified_n50_adv', 'epoch': 22}, 'lambda_adv': 1.0, 'max_grad_norm': 1.0, 'lambda_slope': 10.0, 'lambda_min': 0.0, 'lambda_auto': True, 'disc_steps': 1}
+[2025-10-13 21:12:46] train_n50.py(166) : logger_params: {'log_file': {'desc': 'train_unified_n50_adv', 'filename': 'run_log', 'filepath': './result/20251013_231245_train_unified_n50_adv'}}
+[2025-10-13 21:12:47] VRPTrainer.py(107) : =================================================================
+[2025-10-13 21:12:49] VRPTrainer.py(187) : Epoch   1: Train  32/10000(0.3%)   Score: 31.5301, Total: -0.0552 (VRP: -0.0552, Adv: 1.5981, Disc: 1.6042, Acc: 0.062)
+[2025-10-13 21:12:50] VRPTrainer.py(187) : Epoch   1: Train  64/10000(0.6%)   Score: 31.6412, Total: -3.5557 (VRP: -3.5559, Adv: 1.6087, Disc: 1.6121, Acc: 0.047)
+[2025-10-13 21:12:51] VRPTrainer.py(187) : Epoch   1: Train  96/10000(1.0%)   Score: 30.2160, Total: -5.2341 (VRP: -5.2345, Adv: 1.6081, Disc: 1.6122, Acc: 0.062)
+[2025-10-13 21:12:52] VRPTrainer.py(187) : Epoch   1: Train 128/10000(1.3%)   Score: 28.9727, Total: -5.4265 (VRP: -5.4271, Adv: 1.6090, Disc: 1.6110, Acc: 0.062)
+[2025-10-13 21:12:52] VRPTrainer.py(187) : Epoch   1: Train 160/10000(1.6%)   Score: 27.4265, Total: -4.8823 (VRP: -4.8830, Adv: 1.6065, Disc: 1.6079, Acc: 0.087)
+[2025-10-13 21:12:52] VRPTrainer.py(187) : Epoch   1: Train 192/10000(1.9%)   Score: 25.6985, Total: -4.5525 (VRP: -4.5534, Adv: 1.6070, Disc: 1.6087, Acc: 0.083)
+[2025-10-13 21:12:53] VRPTrainer.py(187) : Epoch   1: Train 224/10000(2.2%)   Score: 24.7998, Total: -4.3817 (VRP: -4.3828, Adv: 1.6070, Disc: 1.6072, Acc: 0.103)
+[2025-10-13 21:12:53] VRPTrainer.py(187) : Epoch   1: Train 256/10000(2.6%)   Score: 23.8852, Total: -4.3340 (VRP: -4.3353, Adv: 1.6058, Disc: 1.6052, Acc: 0.113)
+[2025-10-13 21:12:54] VRPTrainer.py(187) : Epoch   1: Train 288/10000(2.9%)   Score: 22.6820, Total: -4.2145 (VRP: -4.2160, Adv: 1.6043, Disc: 1.6058, Acc: 0.104)
+[2025-10-13 21:12:54] VRPTrainer.py(187) : Epoch   1: Train 320/10000(3.2%)   Score: 21.8837, Total: -4.0255 (VRP: -4.0273, Adv: 1.6040, Disc: 1.6050, Acc: 0.109)

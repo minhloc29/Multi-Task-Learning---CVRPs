@@ -1,0 +1,59 @@
+[2025-10-10 12:32:03] test_n50.py(106) : DEBUG_MODE: False
+[2025-10-10 12:32:03] test_n50.py(107) : USE_CUDA: True, CUDA_DEVICE_NUM: 0
+[2025-10-10 12:32:03] test_n50.py(108) : env_params{'problem_type': 'CVRP', 'problem_size': 50, 'pomo_size': 50}
+[2025-10-10 12:32:03] test_n50.py(108) : model_params{'embedding_dim': 128, 'sqrt_embedding_dim': 11.313708498984761, 'encoder_layer_num': 6, 'qkv_dim': 16, 'head_num': 8, 'logit_clipping': 10, 'ff_hidden_dim': 512, 'eval_type': 'argmax'}
+[2025-10-10 12:32:03] test_n50.py(108) : tester_params{'use_cuda': True, 'cuda_device_num': 0, 'model_load': {'path': 'result/20251010_091149_train_unified_n50_adv', 'epoch': 100}, 'test_episodes': 5000, 'test_batch_size': 100, 'augmentation_enable': True, 'aug_factor': 8, 'aug_batch_size': 100, 'test_data_load': {'enable': False, 'filename': '../../../test_instances/data_CVRP_50_5000.pt'}}
+[2025-10-10 12:32:03] test_n50.py(108) : logger_params{'log_file': {'desc': 'test_CVRP_n50_with_instNorm', 'filename': 'run_log', 'filepath': './result/20251010_143200_test_CVRP_n50_with_instNorm'}}
+[2025-10-10 12:32:16] VRPTester.py(83) : episode 100/5000, Elapsed[0.22m], Remain[10.55m], score:15.028, aug_score:13.748
+[2025-10-10 12:32:29] VRPTester.py(83) : episode 200/5000, Elapsed[0.43m], Remain[10.30m], score:15.190, aug_score:14.071
+[2025-10-10 12:32:42] VRPTester.py(83) : episode 300/5000, Elapsed[0.64m], Remain[10.04m], score:15.105, aug_score:13.963
+[2025-10-10 12:32:54] VRPTester.py(83) : episode 400/5000, Elapsed[0.85m], Remain[9.76m], score:15.030, aug_score:13.814
+[2025-10-10 12:33:07] VRPTester.py(83) : episode 500/5000, Elapsed[1.06m], Remain[9.52m], score:14.973, aug_score:13.649
+[2025-10-10 12:33:19] VRPTester.py(83) : episode 600/5000, Elapsed[1.26m], Remain[9.27m], score:15.047, aug_score:13.735
+[2025-10-10 12:33:36] VRPTester.py(83) : episode 700/5000, Elapsed[1.54m], Remain[9.45m], score:14.906, aug_score:13.639
+[2025-10-10 12:33:54] VRPTester.py(83) : episode 800/5000, Elapsed[1.85m], Remain[9.71m], score:14.922, aug_score:13.821
+[2025-10-10 12:34:16] VRPTester.py(83) : episode 900/5000, Elapsed[2.21m], Remain[10.07m], score:15.116, aug_score:13.847
+[2025-10-10 12:34:50] VRPTester.py(83) : episode 1000/5000, Elapsed[2.78m], Remain[11.12m], score:14.945, aug_score:13.771
+[2025-10-10 12:35:23] VRPTester.py(83) : episode 1100/5000, Elapsed[3.32m], Remain[11.78m], score:14.783, aug_score:13.525
+[2025-10-10 12:35:55] VRPTester.py(83) : episode 1200/5000, Elapsed[3.86m], Remain[12.23m], score:14.985, aug_score:13.699
+[2025-10-10 12:36:28] VRPTester.py(83) : episode 1300/5000, Elapsed[4.40m], Remain[12.53m], score:15.170, aug_score:13.844
+[2025-10-10 12:37:00] VRPTester.py(83) : episode 1400/5000, Elapsed[4.95m], Remain[12.72m], score:15.193, aug_score:13.987
+[2025-10-10 12:37:40] VRPTester.py(83) : episode 1500/5000, Elapsed[5.60m], Remain[13.07m], score:15.003, aug_score:13.843
+[2025-10-10 12:38:14] VRPTester.py(83) : episode 1600/5000, Elapsed[6.17m], Remain[13.11m], score:15.228, aug_score:13.937
+[2025-10-10 12:38:47] VRPTester.py(83) : episode 1700/5000, Elapsed[6.72m], Remain[13.05m], score:15.170, aug_score:13.954
+[2025-10-10 12:39:20] VRPTester.py(83) : episode 1800/5000, Elapsed[7.28m], Remain[12.94m], score:14.918, aug_score:13.894
+[2025-10-10 12:39:36] VRPTester.py(83) : episode 1900/5000, Elapsed[7.54m], Remain[12.31m], score:15.098, aug_score:13.874
+[2025-10-10 12:40:11] VRPTester.py(83) : episode 2000/5000, Elapsed[8.12m], Remain[12.18m], score:14.993, aug_score:13.796
+[2025-10-10 12:40:44] VRPTester.py(83) : episode 2100/5000, Elapsed[8.68m], Remain[11.99m], score:15.179, aug_score:13.877
+[2025-10-10 12:41:19] VRPTester.py(83) : episode 2200/5000, Elapsed[9.26m], Remain[11.79m], score:15.149, aug_score:13.831
+[2025-10-10 12:41:36] VRPTester.py(83) : episode 2300/5000, Elapsed[9.54m], Remain[11.20m], score:14.998, aug_score:13.661
+[2025-10-10 12:42:09] VRPTester.py(83) : episode 2400/5000, Elapsed[10.10m], Remain[10.94m], score:15.216, aug_score:14.022
+[2025-10-10 12:42:41] VRPTester.py(83) : episode 2500/5000, Elapsed[10.63m], Remain[10.63m], score:15.360, aug_score:14.102
+[2025-10-10 12:43:12] VRPTester.py(83) : episode 2600/5000, Elapsed[11.15m], Remain[10.29m], score:14.951, aug_score:13.774
+[2025-10-10 12:43:44] VRPTester.py(83) : episode 2700/5000, Elapsed[11.68m], Remain[9.95m], score:14.754, aug_score:13.536
+[2025-10-10 12:44:15] VRPTester.py(83) : episode 2800/5000, Elapsed[12.20m], Remain[9.58m], score:15.104, aug_score:13.903
+[2025-10-10 12:44:48] VRPTester.py(83) : episode 2900/5000, Elapsed[12.75m], Remain[9.23m], score:15.057, aug_score:13.715
+[2025-10-10 12:45:21] VRPTester.py(83) : episode 3000/5000, Elapsed[13.28m], Remain[8.86m], score:15.072, aug_score:13.795
+[2025-10-10 12:45:55] VRPTester.py(83) : episode 3100/5000, Elapsed[13.86m], Remain[8.49m], score:15.142, aug_score:13.966
+[2025-10-10 12:46:30] VRPTester.py(83) : episode 3200/5000, Elapsed[14.44m], Remain[8.12m], score:15.199, aug_score:13.943
+[2025-10-10 12:46:43] VRPTester.py(83) : episode 3300/5000, Elapsed[14.66m], Remain[7.55m], score:15.208, aug_score:13.809
+[2025-10-10 12:46:56] VRPTester.py(83) : episode 3400/5000, Elapsed[14.87m], Remain[7.00m], score:15.088, aug_score:13.846
+[2025-10-10 12:47:09] VRPTester.py(83) : episode 3500/5000, Elapsed[15.08m], Remain[6.46m], score:15.028, aug_score:13.833
+[2025-10-10 12:47:21] VRPTester.py(83) : episode 3600/5000, Elapsed[15.29m], Remain[5.95m], score:15.046, aug_score:13.877
+[2025-10-10 12:47:34] VRPTester.py(83) : episode 3700/5000, Elapsed[15.52m], Remain[5.45m], score:15.290, aug_score:13.897
+[2025-10-10 12:47:48] VRPTester.py(83) : episode 3800/5000, Elapsed[15.73m], Remain[4.97m], score:15.123, aug_score:13.748
+[2025-10-10 12:48:00] VRPTester.py(83) : episode 3900/5000, Elapsed[15.94m], Remain[4.50m], score:14.992, aug_score:13.698
+[2025-10-10 12:48:14] VRPTester.py(83) : episode 4000/5000, Elapsed[16.17m], Remain[4.04m], score:14.991, aug_score:13.800
+[2025-10-10 12:48:27] VRPTester.py(83) : episode 4100/5000, Elapsed[16.39m], Remain[3.60m], score:14.766, aug_score:13.669
+[2025-10-10 12:48:40] VRPTester.py(83) : episode 4200/5000, Elapsed[16.62m], Remain[3.16m], score:14.823, aug_score:13.786
+[2025-10-10 12:48:54] VRPTester.py(83) : episode 4300/5000, Elapsed[16.84m], Remain[2.74m], score:15.171, aug_score:13.923
+[2025-10-10 12:49:07] VRPTester.py(83) : episode 4400/5000, Elapsed[17.06m], Remain[2.33m], score:14.948, aug_score:13.834
+[2025-10-10 12:49:20] VRPTester.py(83) : episode 4500/5000, Elapsed[17.28m], Remain[1.92m], score:14.951, aug_score:13.750
+[2025-10-10 12:49:33] VRPTester.py(83) : episode 4600/5000, Elapsed[17.49m], Remain[1.52m], score:15.349, aug_score:14.016
+[2025-10-10 12:49:46] VRPTester.py(83) : episode 4700/5000, Elapsed[17.71m], Remain[1.13m], score:14.936, aug_score:13.762
+[2025-10-10 12:49:59] VRPTester.py(83) : episode 4800/5000, Elapsed[17.92m], Remain[0.75m], score:15.327, aug_score:13.889
+[2025-10-10 12:50:12] VRPTester.py(83) : episode 4900/5000, Elapsed[18.15m], Remain[0.37m], score:15.327, aug_score:13.956
+[2025-10-10 12:50:25] VRPTester.py(83) : episode 5000/5000, Elapsed[18.36m], Remain[0.00m], score:14.942, aug_score:13.660
+[2025-10-10 12:50:25] VRPTester.py(89) :  *** Test Done *** 
+[2025-10-10 12:50:25] VRPTester.py(90) :  NO-AUG SCORE: 15.0658 
+[2025-10-10 12:50:25] VRPTester.py(91) :  AUGMENTATION SCORE: 13.8257 

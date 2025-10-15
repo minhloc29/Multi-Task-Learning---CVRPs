@@ -55,6 +55,10 @@ class VRPEnv:
         self.pomo_size = env_params['pomo_size']
         self.problem_type = env_params['problem_type']
 
+        self.problem_type_list = ['CVRP', 'OVRP', 'VRPB', 'VRPTW', 'VRPL']
+        if self.problem_type not in self.problem_type_list:
+            self.problem_type_list.append(self.problem_type)
+
         self.FLAG__use_saved_problems = False
         self.saved_depot_xy = None
         self.saved_node_xy = None
@@ -147,92 +151,89 @@ class VRPEnv:
         self.saved_index = 0
 
     def load_problems(self, batch_size, aug_factor=1):
-        self.batch_size = batch_size
+     self.batch_size = batch_size
 
-        if not self.FLAG__use_saved_problems:
-            depot_xy, node_xy, node_demand, node_earlyTW, node_lateTW, node_servicetime, route_open, route_length_limit = get_random_problems_mixed(batch_size, self.problem_size, self.problem_type)
-        else:
-            depot_xy = self.saved_depot_xy[self.saved_index:self.saved_index+batch_size]
-            node_xy = self.saved_node_xy[self.saved_index:self.saved_index+batch_size]
-            node_demand = self.saved_node_demand[self.saved_index:self.saved_index+batch_size]
-            node_earlyTW = self.saved_node_earlyTW[self.saved_index:self.saved_index+batch_size]
-            node_lateTW = self.saved_node_lateTW[self.saved_index:self.saved_index+batch_size]
-            node_servicetime = self.saved_node_servicetime[self.saved_index:self.saved_index+batch_size]
-            route_open = self.saved_route_open[self.saved_index:self.saved_index+batch_size]
-            route_length_limit = self.saved_route_length[self.saved_index:self.saved_index+batch_size]
-            self.saved_index += batch_size
+     # ----- Multi-task mixing -----
+     num_tasks = 5  # tổng số task/domain (VD: CVRP, VRPTW, OVRP, ... tùy theo bạn định nghĩa)
+     labels = torch.randint(low=0, high=num_tasks, size=(batch_size,), dtype=torch.long)
+     self.task_label = labels  # <--- mỗi phần tử trong batch giờ là 1 task khác nhau
 
-        if aug_factor > 1:
-            if aug_factor == 8:
-                self.batch_size = self.batch_size * 8
-                depot_xy = augment_xy_data_by_8_fold(depot_xy)
-                node_xy = augment_xy_data_by_8_fold(node_xy)
-                node_demand = node_demand.repeat(8, 1)
-                node_earlyTW= node_earlyTW.repeat(8,1)
-                node_lateTW = node_lateTW.repeat(8,1)
-                node_servicetime = node_servicetime.repeat(8,1)
-                route_open = route_open.repeat(8,1)
-                route_length_limit = route_length_limit.repeat(8,1)
-            else:
-                raise NotImplementedError
+     depot_xy = torch.zeros(batch_size, 1, 2)
+     node_xy = torch.zeros(batch_size, self.problem_size, 2)
+     node_demand = torch.zeros(batch_size, self.problem_size)
+     node_earlyTW = torch.zeros(batch_size, self.problem_size)
+     node_lateTW = torch.zeros(batch_size, self.problem_size)
+     node_servicetime = torch.zeros(batch_size, self.problem_size)
+     route_open = torch.zeros(batch_size, self.problem_size)
+     route_length_limit = torch.zeros(batch_size, self.pomo_size)
+
+     # Sinh dữ liệu cho từng task riêng rồi ghép lại
+     for t in range(num_tasks):
+        idx = (labels == t).nonzero(as_tuple=True)[0]
+        if len(idx) == 0:
+            continue
+        depot_xy_t, node_xy_t, node_demand_t, node_earlyTW_t, node_lateTW_t, node_servicetime_t, route_open_t, route_length_limit_t = \
+            get_random_problems_mixed(len(idx), self.problem_size, self.problem_type_list[t])
         
-        self.route_open = route_open
-        # shape: (batch,pomo)
-        self.length = route_length_limit
-        # shape: (batch,pomo)
+        depot_xy[idx] = depot_xy_t
+        node_xy[idx] = node_xy_t
+        node_demand[idx] = node_demand_t
+        node_earlyTW[idx] = node_earlyTW_t
+        node_lateTW[idx] = node_lateTW_t
+        node_servicetime[idx] = node_servicetime_t
+        route_open[idx] = route_open_t
+        route_length_limit[idx] = route_length_limit_t
 
-        self.depot_node_xy = torch.cat((depot_xy, node_xy), dim=1)
-        # shape: (batch, problem+1, 2)
-        depot_demand = torch.zeros(size=(self.batch_size, 1))
-        # shape: (batch, 1)
-        self.depot_node_demand = torch.cat((depot_demand, node_demand), dim=1)
-        # shape: (batch, problem+1)
-
-        depot_earlyTW = torch.zeros(size=(self.batch_size, 1))
-        # shape: (batch, 1)
-        depot_lateTW = 4.6*torch.ones(size=(self.batch_size, 1)) # the lenght of time windows should be normalized into [0,1] not 4.6
-        # shape: (batch, 1)
-        depot_servicetime = torch.zeros(size=(self.batch_size, 1))
-        # shape: (batch, 1)
-        self.depot_node_earlyTW = torch.cat((depot_earlyTW, node_earlyTW), dim=1)
-        # shape: (batch, problem+1)
-        self.depot_node_lateTW = torch.cat((depot_lateTW, node_lateTW), dim=1)
-        # shape: (batch, problem+1)
-        self.depot_node_servicetime = torch.cat((depot_servicetime, node_servicetime), dim=1)
-        # shape: (batch, problem+1)
-
-        self.BATCH_IDX = torch.arange(self.batch_size)[:, None].expand(self.batch_size, self.pomo_size)
-        self.POMO_IDX = torch.arange(self.pomo_size)[None, :].expand(self.batch_size, self.pomo_size)
-
-        self.reset_state.depot_xy = depot_xy
-        self.reset_state.node_xy = node_xy
-        self.reset_state.node_demand = node_demand
-        self.reset_state.node_earlyTW = node_earlyTW
-        self.reset_state.node_lateTW = node_lateTW
-        
-
-        self.step_state.BATCH_IDX = self.BATCH_IDX
-        self.step_state.POMO_IDX = self.POMO_IDX
-
-        label_int = self._get_task_label()
-        self.task_label = torch.full((self.batch_size,), label_int, dtype=torch.long)
-
-        if (node_demand.sum()>0):
-            self.attribute_c = True
+     # ----- Augmentation -----
+     if aug_factor > 1:
+        if aug_factor == 8:
+            self.batch_size = self.batch_size * 8
+            depot_xy = augment_xy_data_by_8_fold(depot_xy)
+            node_xy = augment_xy_data_by_8_fold(node_xy)
+            node_demand = node_demand.repeat(8, 1)
+            node_earlyTW = node_earlyTW.repeat(8, 1)
+            node_lateTW = node_lateTW.repeat(8, 1)
+            node_servicetime = node_servicetime.repeat(8, 1)
+            route_open = route_open.repeat(8, 1)
+            route_length_limit = route_length_limit.repeat(8, 1)
+            self.task_label = self.task_label.repeat(8)
         else:
-            self.attribute_c = False
-        if (node_lateTW.sum()>0):
-            self.attribute_tw = True
-        else:
-            self.attribute_tw = False
-        if (route_open.sum()>0):
-            self.attribute_o = True
-        else:
-            self.attribute_o = False
-        if (route_length_limit.sum()>0):
-            self.attribute_l = True
-        else:
-            self.attribute_l = False
+            raise NotImplementedError
+
+     # ----- Gộp depot + node -----
+     self.route_open = route_open
+     self.length = route_length_limit
+
+     self.depot_node_xy = torch.cat((depot_xy, node_xy), dim=1)
+     depot_demand = torch.zeros(size=(self.batch_size, 1))
+     self.depot_node_demand = torch.cat((depot_demand, node_demand), dim=1)
+
+     depot_earlyTW = torch.zeros(size=(self.batch_size, 1))
+     depot_lateTW = 4.6 * torch.ones(size=(self.batch_size, 1))
+     depot_servicetime = torch.zeros(size=(self.batch_size, 1))
+     self.depot_node_earlyTW = torch.cat((depot_earlyTW, node_earlyTW), dim=1)
+     self.depot_node_lateTW = torch.cat((depot_lateTW, node_lateTW), dim=1)
+     self.depot_node_servicetime = torch.cat((depot_servicetime, node_servicetime), dim=1)
+
+     # ----- Index setup -----
+     self.BATCH_IDX = torch.arange(self.batch_size)[:, None].expand(self.batch_size, self.pomo_size)
+     self.POMO_IDX = torch.arange(self.pomo_size)[None, :].expand(self.batch_size, self.pomo_size)
+
+     self.reset_state.depot_xy = depot_xy
+     self.reset_state.node_xy = node_xy
+     self.reset_state.node_demand = node_demand
+     self.reset_state.node_earlyTW = node_earlyTW
+     self.reset_state.node_lateTW = node_lateTW
+
+     self.step_state.BATCH_IDX = self.BATCH_IDX
+     self.step_state.POMO_IDX = self.POMO_IDX
+
+     # ----- Attribute flags -----
+     self.attribute_c = (node_demand.sum() > 0)
+     self.attribute_tw = (node_lateTW.sum() > 0)
+     self.attribute_o = (route_open.sum() > 0)
+     self.attribute_l = (route_length_limit.sum() > 0)
+
 
 
     def reset(self):

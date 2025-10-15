@@ -51,14 +51,14 @@ tester_params = {
     'use_cuda': USE_CUDA,
     'cuda_device_num': CUDA_DEVICE_NUM,
     'model_load': {
-        'path': '../../Trained_models/50',  # directory path of pre-trained model and log files saved.
-        'epoch': 100,  # epoch version of pre-trained model to laod.
+        'path': 'result/20251015_180420_train_unified_n50_adv',  # directory path of pre-trained model and log files saved.
+        'epoch': 8,  # epoch version of pre-trained model to laod.
     },
     'test_episodes': 5000,
-    'test_batch_size': 500,
+    'test_batch_size': 100,
     'augmentation_enable': True,
     'aug_factor': 8,
-    'aug_batch_size': 500,
+    'aug_batch_size': 100,
     'test_data_load': {
         'enable': False,
         'filename': '../../../test_instances/data_'+env_params['problem_type']+'_'+str(env_params['pomo_size'])\

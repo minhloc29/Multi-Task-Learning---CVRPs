@@ -1,0 +1,152 @@
+[2025-10-08 18:08:38] train_n50.py(154) : DEBUG_MODE: False
+[2025-10-08 18:08:38] train_n50.py(155) : USE_CUDA: True, CUDA_DEVICE_NUM: 0
+[2025-10-08 18:08:38] train_n50.py(159) : env_params: {'problem_type': 'unified', 'problem_size': 50, 'pomo_size': 50}
+[2025-10-08 18:08:38] train_n50.py(159) : model_params: {'embedding_dim': 128, 'sqrt_embedding_dim': 11.313708498984761, 'encoder_layer_num': 6, 'qkv_dim': 16, 'head_num': 8, 'logit_clipping': 10, 'ff_hidden_dim': 512, 'eval_type': 'argmax', 'num_tasks': 5}
+[2025-10-08 18:08:38] train_n50.py(159) : optimizer_params: {'optimizer': {'lr': 0.0001, 'weight_decay': 1e-06}, 'scheduler': {'milestones': [8001, 8051], 'gamma': 0.1}, 'discriminator_optimizer': {'lr': 0.0001}}
+[2025-10-08 18:08:38] train_n50.py(159) : trainer_params: {'use_cuda': True, 'cuda_device_num': 0, 'epochs': 100, 'train_episodes': 10000, 'train_batch_size': 32, 'prev_model_path': None, 'logging': {'model_save_interval': 2, 'img_save_interval': 2, 'log_image_params_1': {'json_foldername': 'log_image_style', 'filename': 'style_unified_100.json'}, 'log_image_params_2': {'json_foldername': 'log_image_style', 'filename': 'style_loss_1.json'}}, 'model_load': {'enable': False}, 'lambda_adv': 0.3, 'disc_steps': 1}
+[2025-10-08 18:08:38] train_n50.py(159) : logger_params: {'log_file': {'desc': 'train_unified_n50_adv', 'filename': 'run_log', 'filepath': './result/20251008_200834_train_unified_n50_adv'}}
+[2025-10-08 18:08:40] VRPTrainer.py(94) : =================================================================
+[2025-10-08 18:08:43] VRPTrainer.py(173) : Epoch   1: Train  32/10000(0.3%)  Score: 26.3842,  Loss: -1.8323
+[2025-10-08 18:08:46] VRPTrainer.py(173) : Epoch   1: Train  64/10000(0.6%)  Score: 25.6188,  Loss: -3.4306
+[2025-10-08 18:08:48] VRPTrainer.py(173) : Epoch   1: Train  96/10000(1.0%)  Score: 24.6262,  Loss: -2.0834
+[2025-10-08 18:08:51] VRPTrainer.py(173) : Epoch   1: Train 128/10000(1.3%)  Score: 25.2020,  Loss: -1.9299
+[2025-10-08 18:08:53] VRPTrainer.py(173) : Epoch   1: Train 160/10000(1.6%)  Score: 24.7265,  Loss: -1.3956
+[2025-10-08 18:08:55] VRPTrainer.py(173) : Epoch   1: Train 192/10000(1.9%)  Score: 24.3633,  Loss: -1.0569
+[2025-10-08 18:08:58] VRPTrainer.py(173) : Epoch   1: Train 224/10000(2.2%)  Score: 24.3395,  Loss: -1.5648
+[2025-10-08 18:09:00] VRPTrainer.py(173) : Epoch   1: Train 256/10000(2.6%)  Score: 24.3564,  Loss: -1.9010
+[2025-10-08 18:09:04] VRPTrainer.py(173) : Epoch   1: Train 288/10000(2.9%)  Score: 25.2636,  Loss: -2.2036
+[2025-10-08 18:09:07] VRPTrainer.py(173) : Epoch   1: Train 320/10000(3.2%)  Score: 25.1432,  Loss: -2.3866
+[2025-10-08 18:24:54] VRPTrainer.py(178) : Epoch   1: Train (100%)  Score: 20.9988,  Loss: -1.5774
+[2025-10-08 18:24:54] VRPTrainer.py(108) : Epoch   1/100: Time Est.: Elapsed[16.23m], Remain[26.78h]
+[2025-10-08 18:24:54] VRPTrainer.py(94) : =================================================================
+[2025-10-08 18:37:15] VRPTrainer.py(178) : Epoch   2: Train (100%)  Score: 18.8925,  Loss: -0.9175
+[2025-10-08 18:37:15] VRPTrainer.py(108) : Epoch   2/100: Time Est.: Elapsed[28.59m], Remain[23.35h]
+[2025-10-08 18:37:15] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 18:37:16] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 18:37:16] VRPTrainer.py(94) : =================================================================
+[2025-10-08 18:49:33] VRPTrainer.py(178) : Epoch   3: Train (100%)  Score: 18.4814,  Loss: -0.5901
+[2025-10-08 18:49:33] VRPTrainer.py(108) : Epoch   3/100: Time Est.: Elapsed[40.88m], Remain[22.03h]
+[2025-10-08 18:49:33] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 18:49:33] VRPTrainer.py(94) : =================================================================
+[2025-10-08 18:59:27] VRPTrainer.py(178) : Epoch   4: Train (100%)  Score: 18.4100,  Loss: -0.5033
+[2025-10-08 18:59:27] VRPTrainer.py(108) : Epoch   4/100: Time Est.: Elapsed[50.79m], Remain[20.31h]
+[2025-10-08 18:59:27] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 18:59:27] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 18:59:27] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:04:42] VRPTrainer.py(178) : Epoch   5: Train (100%)  Score: 18.3303,  Loss: -0.3755
+[2025-10-08 19:04:42] VRPTrainer.py(108) : Epoch   5/100: Time Est.: Elapsed[56.03m], Remain[17.74h]
+[2025-10-08 19:04:42] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:04:42] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:09:55] VRPTrainer.py(178) : Epoch   6: Train (100%)  Score: 18.2531,  Loss: -0.3233
+[2025-10-08 19:09:55] VRPTrainer.py(108) : Epoch   6/100: Time Est.: Elapsed[1.02h], Remain[16.00h]
+[2025-10-08 19:09:55] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:09:56] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 19:09:56] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:15:10] VRPTrainer.py(178) : Epoch   7: Train (100%)  Score: 18.4106,  Loss: -0.3979
+[2025-10-08 19:15:10] VRPTrainer.py(108) : Epoch   7/100: Time Est.: Elapsed[1.11h], Remain[14.73h]
+[2025-10-08 19:15:10] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:15:10] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:20:23] VRPTrainer.py(178) : Epoch   8: Train (100%)  Score: 17.5884,  Loss: -0.4985
+[2025-10-08 19:20:23] VRPTrainer.py(108) : Epoch   8/100: Time Est.: Elapsed[1.20h], Remain[13.75h]
+[2025-10-08 19:20:23] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:20:24] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 19:20:24] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:25:38] VRPTrainer.py(178) : Epoch   9: Train (100%)  Score: 17.2280,  Loss: -0.3283
+[2025-10-08 19:25:38] VRPTrainer.py(108) : Epoch   9/100: Time Est.: Elapsed[1.28h], Remain[12.97h]
+[2025-10-08 19:25:38] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:25:38] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:30:55] VRPTrainer.py(178) : Epoch  10: Train (100%)  Score: 16.8702,  Loss: -0.3664
+[2025-10-08 19:30:55] VRPTrainer.py(108) : Epoch  10/100: Time Est.: Elapsed[1.37h], Remain[12.34h]
+[2025-10-08 19:30:55] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:30:56] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 19:30:56] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:36:20] VRPTrainer.py(178) : Epoch  11: Train (100%)  Score: 16.9113,  Loss: -0.2495
+[2025-10-08 19:36:20] VRPTrainer.py(108) : Epoch  11/100: Time Est.: Elapsed[1.46h], Remain[11.82h]
+[2025-10-08 19:36:20] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:36:21] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:42:07] VRPTrainer.py(178) : Epoch  12: Train (100%)  Score: 16.2195,  Loss: -0.2346
+[2025-10-08 19:42:07] VRPTrainer.py(108) : Epoch  12/100: Time Est.: Elapsed[1.56h], Remain[11.42h]
+[2025-10-08 19:42:07] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:42:07] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 19:42:07] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:48:21] VRPTrainer.py(178) : Epoch  13: Train (100%)  Score: 16.8573,  Loss: -0.5576
+[2025-10-08 19:48:21] VRPTrainer.py(108) : Epoch  13/100: Time Est.: Elapsed[1.66h], Remain[11.12h]
+[2025-10-08 19:48:21] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:48:21] VRPTrainer.py(94) : =================================================================
+[2025-10-08 19:58:55] VRPTrainer.py(178) : Epoch  14: Train (100%)  Score: 16.8474,  Loss: -0.6594
+[2025-10-08 19:58:55] VRPTrainer.py(108) : Epoch  14/100: Time Est.: Elapsed[1.84h], Remain[11.29h]
+[2025-10-08 19:58:55] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 19:58:55] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 19:58:55] VRPTrainer.py(94) : =================================================================
+[2025-10-08 20:13:14] VRPTrainer.py(178) : Epoch  15: Train (100%)  Score: 15.8808,  Loss: -0.1837
+[2025-10-08 20:13:14] VRPTrainer.py(108) : Epoch  15/100: Time Est.: Elapsed[2.08h], Remain[11.77h]
+[2025-10-08 20:13:14] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 20:13:15] VRPTrainer.py(94) : =================================================================
+[2025-10-08 20:24:10] VRPTrainer.py(178) : Epoch  16: Train (100%)  Score: 16.1818,  Loss: -0.1424
+[2025-10-08 20:24:10] VRPTrainer.py(108) : Epoch  16/100: Time Est.: Elapsed[2.26h], Remain[11.86h]
+[2025-10-08 20:24:10] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 20:24:10] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 20:24:11] VRPTrainer.py(94) : =================================================================
+[2025-10-08 20:32:40] VRPTrainer.py(178) : Epoch  17: Train (100%)  Score: 16.1844,  Loss: -0.1388
+[2025-10-08 20:32:40] VRPTrainer.py(108) : Epoch  17/100: Time Est.: Elapsed[2.40h], Remain[11.72h]
+[2025-10-08 20:32:40] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 20:32:41] VRPTrainer.py(94) : =================================================================
+[2025-10-08 20:38:11] VRPTrainer.py(178) : Epoch  18: Train (100%)  Score: 15.7515,  Loss: -0.1412
+[2025-10-08 20:38:11] VRPTrainer.py(108) : Epoch  18/100: Time Est.: Elapsed[2.49h], Remain[11.35h]
+[2025-10-08 20:38:11] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 20:38:11] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 20:38:11] VRPTrainer.py(94) : =================================================================
+[2025-10-08 20:48:43] VRPTrainer.py(178) : Epoch  19: Train (100%)  Score: 15.8739,  Loss: -0.1601
+[2025-10-08 20:48:43] VRPTrainer.py(108) : Epoch  19/100: Time Est.: Elapsed[2.67h], Remain[11.37h]
+[2025-10-08 20:48:43] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 20:48:44] VRPTrainer.py(94) : =================================================================
+[2025-10-08 20:58:52] VRPTrainer.py(178) : Epoch  20: Train (100%)  Score: 15.6866,  Loss: -0.1299
+[2025-10-08 20:58:52] VRPTrainer.py(108) : Epoch  20/100: Time Est.: Elapsed[2.84h], Remain[11.35h]
+[2025-10-08 20:58:52] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 20:58:52] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 20:58:52] VRPTrainer.py(94) : =================================================================
+[2025-10-08 21:04:56] VRPTrainer.py(178) : Epoch  21: Train (100%)  Score: 15.5453,  Loss: -0.1402
+[2025-10-08 21:04:56] VRPTrainer.py(108) : Epoch  21/100: Time Est.: Elapsed[2.94h], Remain[11.05h]
+[2025-10-08 21:04:56] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 21:04:56] VRPTrainer.py(94) : =================================================================
+[2025-10-08 21:10:50] VRPTrainer.py(178) : Epoch  22: Train (100%)  Score: 16.0234,  Loss: -0.1868
+[2025-10-08 21:10:50] VRPTrainer.py(108) : Epoch  22/100: Time Est.: Elapsed[3.04h], Remain[10.76h]
+[2025-10-08 21:10:50] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 21:10:50] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 21:10:51] VRPTrainer.py(94) : =================================================================
+[2025-10-08 21:16:49] VRPTrainer.py(178) : Epoch  23: Train (100%)  Score: 15.9022,  Loss: -0.2807
+[2025-10-08 21:16:49] VRPTrainer.py(108) : Epoch  23/100: Time Est.: Elapsed[3.14h], Remain[10.50h]
+[2025-10-08 21:16:49] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 21:16:49] VRPTrainer.py(94) : =================================================================
+[2025-10-08 21:22:39] VRPTrainer.py(178) : Epoch  24: Train (100%)  Score: 15.8169,  Loss: -0.3368
+[2025-10-08 21:22:39] VRPTrainer.py(108) : Epoch  24/100: Time Est.: Elapsed[3.23h], Remain[10.24h]
+[2025-10-08 21:22:39] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 21:22:39] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 21:22:39] VRPTrainer.py(94) : =================================================================
+[2025-10-08 21:39:58] VRPTrainer.py(178) : Epoch  25: Train (100%)  Score: 15.7238,  Loss: -0.1429
+[2025-10-08 21:39:58] VRPTrainer.py(108) : Epoch  25/100: Time Est.: Elapsed[3.52h], Remain[10.57h]
+[2025-10-08 21:39:58] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 21:39:59] VRPTrainer.py(94) : =================================================================
+[2025-10-08 21:57:33] VRPTrainer.py(178) : Epoch  26: Train (100%)  Score: 15.8339,  Loss: -0.1305
+[2025-10-08 21:57:33] VRPTrainer.py(108) : Epoch  26/100: Time Est.: Elapsed[3.81h], Remain[10.86h]
+[2025-10-08 21:57:33] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 21:57:34] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 21:57:34] VRPTrainer.py(94) : =================================================================
+[2025-10-08 22:11:13] VRPTrainer.py(178) : Epoch  27: Train (100%)  Score: 15.2904,  Loss: -0.0718
+[2025-10-08 22:11:13] VRPTrainer.py(108) : Epoch  27/100: Time Est.: Elapsed[4.04h], Remain[10.93h]
+[2025-10-08 22:11:13] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 22:11:13] VRPTrainer.py(94) : =================================================================
+[2025-10-08 22:26:26] VRPTrainer.py(178) : Epoch  28: Train (100%)  Score: 16.1158,  Loss: -0.1105
+[2025-10-08 22:26:26] VRPTrainer.py(108) : Epoch  28/100: Time Est.: Elapsed[4.30h], Remain[11.05h]
+[2025-10-08 22:26:26] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 22:26:26] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 22:26:26] VRPTrainer.py(94) : =================================================================
+[2025-10-08 22:36:14] VRPTrainer.py(178) : Epoch  29: Train (100%)  Score: 16.2599,  Loss: -0.1807
+[2025-10-08 22:36:14] VRPTrainer.py(108) : Epoch  29/100: Time Est.: Elapsed[4.46h], Remain[10.92h]
+[2025-10-08 22:36:14] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 22:36:14] VRPTrainer.py(94) : =================================================================
+[2025-10-08 22:43:40] VRPTrainer.py(178) : Epoch  30: Train (100%)  Score: 16.1242,  Loss: -0.1878
+[2025-10-08 22:43:40] VRPTrainer.py(108) : Epoch  30/100: Time Est.: Elapsed[4.58h], Remain[10.69h]
+[2025-10-08 22:43:40] VRPTrainer.py(117) : Saving log_image
+[2025-10-08 22:43:41] VRPTrainer.py(126) : Saving trained_model
+[2025-10-08 22:43:41] VRPTrainer.py(94) : =================================================================

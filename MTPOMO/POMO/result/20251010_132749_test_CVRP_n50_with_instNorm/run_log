@@ -1,0 +1,11 @@
+[2025-10-10 11:27:50] test_n50.py(106) : DEBUG_MODE: False
+[2025-10-10 11:27:50] test_n50.py(107) : USE_CUDA: True, CUDA_DEVICE_NUM: 0
+[2025-10-10 11:27:50] test_n50.py(108) : env_params{'problem_type': 'CVRP', 'problem_size': 50, 'pomo_size': 50}
+[2025-10-10 11:27:50] test_n50.py(108) : model_params{'embedding_dim': 128, 'sqrt_embedding_dim': 11.313708498984761, 'encoder_layer_num': 6, 'qkv_dim': 16, 'head_num': 8, 'logit_clipping': 10, 'ff_hidden_dim': 512, 'eval_type': 'argmax'}
+[2025-10-10 11:27:50] test_n50.py(108) : tester_params{'use_cuda': True, 'cuda_device_num': 0, 'model_load': {'path': 'result/20251010_091149_train_unified_n50_adv', 'epoch': 100}, 'test_episodes': 5000, 'test_batch_size': 500, 'augmentation_enable': True, 'aug_factor': 8, 'aug_batch_size': 500, 'test_data_load': {'enable': False, 'filename': '../../../test_instances/data_CVRP_50_5000.pt'}}
+[2025-10-10 11:27:50] test_n50.py(108) : logger_params{'log_file': {'desc': 'test_CVRP_n50_with_instNorm', 'filename': 'run_log', 'filepath': './result/20251010_132749_test_CVRP_n50_with_instNorm'}}
+[2025-10-10 11:33:33] VRPTester.py(83) : episode 500/5000, Elapsed[5.71m], Remain[51.42m], score:15.022, aug_score:13.786
+[2025-10-10 11:39:05] VRPTester.py(83) : episode 1000/5000, Elapsed[11.26m], Remain[45.02m], score:15.019, aug_score:13.717
+[2025-10-10 11:45:15] VRPTester.py(83) : episode 1500/5000, Elapsed[17.42m], Remain[40.64m], score:15.144, aug_score:13.950
+[2025-10-10 11:51:16] VRPTester.py(83) : episode 2000/5000, Elapsed[23.44m], Remain[35.16m], score:15.115, aug_score:13.854
+[2025-10-10 11:57:21] VRPTester.py(83) : episode 2500/5000, Elapsed[29.52m], Remain[29.52m], score:15.007, aug_score:13.780

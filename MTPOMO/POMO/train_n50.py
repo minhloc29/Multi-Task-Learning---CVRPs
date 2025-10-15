@@ -58,15 +58,15 @@ model_params = {
 optimizer_params = {
     'optimizer': {
         'lr': 1e-4,
-        'weight_decay': 1e-6
+        'weight_decay': 1e-6,
     },
     'scheduler': {
         'milestones': [8001, 8051],
-        'gamma': 0.1
+        'gamma': 0.1,
     },
     # 🧩 Additional optimizer for adversarial discriminator
     'discriminator_optimizer': {
-        'lr': 1e-4
+        'lr': 1e-5,
     }
 }
 
@@ -79,8 +79,8 @@ trainer_params = {
     'train_batch_size': 32,
     'prev_model_path': None,
     'logging': {
-        'model_save_interval': 100,
-        'img_save_interval': 100,
+        'model_save_interval': 2,
+        'img_save_interval': 2,
         'log_image_params_1': {
             'json_foldername': 'log_image_style',
             'filename': 'style_unified_100.json'
@@ -91,12 +91,29 @@ trainer_params = {
         },
     },
     'model_load': {
-        'enable': False,
+        'enable': True, #Set True when run checkpoint
+        'path': 'result/20251015_180420_train_unified_n50_adv', 
+        'epoch': 8, #fix tuỳ theo cái đã chạy
     },
 
-    # 🧩 Adversarial training parameters
-    'lambda_adv': 0.3,   # weight for adversarial loss term
-    'disc_steps': 1,     # how many discriminator updates per batch
+     # === ADVERSARIAL CONTROL ===
+    'lambda_adv': 0.7,               # trọng số cơ bản của phần đối kháng
+    'alpha_lambda': 0.7,             # độ nhạy khi acc lệch khỏi 0.5
+    'lambda_k': 10,                # tốc độ ramp-up của sigmoid (càng lớn càng nhanh)
+    'lambda_ramp_fraction': 0.3,     # tỉ lệ epoch đầu tiên dùng để tăng lambda
+    'lambda_smax': 1.0,              # giới hạn nhân của lambda (scale clamp)
+    
+    # === DISCRIMINATOR ADAPTIVE ===
+    'disc_steps': 2,                 # số bước ban đầu train D
+    'disc_steps_min': 1,             # giới hạn dưới
+    'disc_steps_max': 5,             # giới hạn trên
+    'running_disc_acc_init': 0.5,    # khởi tạo EMA
+    'running_momentum': 0.95,         # hệ số trơn EMA
+    'max_grad_norm': 1.0,            # tránh gradient explosion
+
+    # === SMOOTHING & NOISE ===
+    'label_smoothing': 0.1,          # làm mềm nhãn cho D (0 → tắt)
+    'enc_noise_std': 1e-3,           # noise nhỏ thêm vào encoded_nodes
 }
 
 # Logging configuration

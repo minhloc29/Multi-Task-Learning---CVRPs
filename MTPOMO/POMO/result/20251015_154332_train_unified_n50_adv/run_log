@@ -1,0 +1,44 @@
+[2025-10-15 13:43:35] train_n50.py(171) : DEBUG_MODE: False
+[2025-10-15 13:43:35] train_n50.py(172) : USE_CUDA: True, CUDA_DEVICE_NUM: 0
+[2025-10-15 13:43:35] train_n50.py(176) : env_params: {'problem_type': 'unified', 'problem_size': 50, 'pomo_size': 50}
+[2025-10-15 13:43:35] train_n50.py(176) : model_params: {'embedding_dim': 128, 'sqrt_embedding_dim': 11.313708498984761, 'encoder_layer_num': 6, 'qkv_dim': 16, 'head_num': 8, 'logit_clipping': 10, 'ff_hidden_dim': 512, 'eval_type': 'argmax', 'num_tasks': 5}
+[2025-10-15 13:43:35] train_n50.py(176) : optimizer_params: {'optimizer': {'lr': 0.0001, 'weight_decay': 1e-06}, 'scheduler': {'milestones': [8001, 8051], 'gamma': 0.1}, 'discriminator_optimizer': {'lr': 1e-05}}
+[2025-10-15 13:43:35] train_n50.py(176) : trainer_params: {'use_cuda': True, 'cuda_device_num': 0, 'epochs': 100, 'train_episodes': 10000, 'train_batch_size': 32, 'prev_model_path': None, 'logging': {'model_save_interval': 2, 'img_save_interval': 2, 'log_image_params_1': {'json_foldername': 'log_image_style', 'filename': 'style_unified_100.json'}, 'log_image_params_2': {'json_foldername': 'log_image_style', 'filename': 'style_loss_1.json'}}, 'model_load': {'enable': True, 'path': 'result/20251015_142251_train_unified_n50_adv', 'epoch': 28}, 'lambda_adv': 1.4, 'alpha_lambda': 0.7, 'lambda_k': 10, 'lambda_ramp_fraction': 0.3, 'lambda_smax': 1.2, 'disc_steps': 2, 'disc_steps_min': 1, 'disc_steps_max': 5, 'running_disc_acc_init': 0.5, 'running_momentum': 0.95, 'max_grad_norm': 1.0, 'label_smoothing': 0.1, 'enc_noise_std': 0.001}
+[2025-10-15 13:43:35] train_n50.py(176) : logger_params: {'log_file': {'desc': 'train_unified_n50_adv', 'filename': 'run_log', 'filepath': './result/20251015_154332_train_unified_n50_adv'}}
+[2025-10-15 13:43:37] VRPTrainer.py(120) : Loaded running_disc_acc: 1.000
+[2025-10-15 13:43:37] VRPTrainer.py(122) : Saved Model Loaded !!
+[2025-10-15 13:43:37] VRPTrainer.py(136) : =================================================================
+[2025-10-15 13:43:38] VRPTrainer.py(220) : Epoch  29: Train  32/10000(0.3%)   Score: 11.4765, Total: 0.4352 (VRP: -0.6269, Adv: 1.1674, Disc: 1.2155, Acc: 1.000)
+[2025-10-15 13:43:40] VRPTrainer.py(220) : Epoch  29: Train  64/10000(0.6%)   Score: 14.3081, Total: 0.3518 (VRP: -0.6892, Adv: 1.1442, Disc: 1.2064, Acc: 1.000)
+[2025-10-15 13:43:42] VRPTrainer.py(220) : Epoch  29: Train  96/10000(1.0%)   Score: 15.4409, Total: 0.3001 (VRP: -0.7346, Adv: 1.1372, Disc: 1.2034, Acc: 1.000)
+[2025-10-15 13:43:43] VRPTrainer.py(220) : Epoch  29: Train 128/10000(1.3%)   Score: 13.7590, Total: 0.2920 (VRP: -0.7492, Adv: 1.1444, Disc: 1.2062, Acc: 1.000)
+[2025-10-15 13:43:45] VRPTrainer.py(220) : Epoch  29: Train 160/10000(1.6%)   Score: 13.2872, Total: 0.3199 (VRP: -0.7241, Adv: 1.1474, Disc: 1.2086, Acc: 1.000)
+[2025-10-15 13:43:46] VRPTrainer.py(220) : Epoch  29: Train 192/10000(1.9%)   Score: 13.9621, Total: 0.2914 (VRP: -0.7490, Adv: 1.1434, Disc: 1.2067, Acc: 1.000)
+[2025-10-15 13:43:48] VRPTrainer.py(220) : Epoch  29: Train 224/10000(2.2%)   Score: 13.0972, Total: 0.3328 (VRP: -0.7090, Adv: 1.1450, Disc: 1.2086, Acc: 1.000)
+[2025-10-15 13:43:50] VRPTrainer.py(220) : Epoch  29: Train 256/10000(2.6%)   Score: 12.8696, Total: 0.3449 (VRP: -0.7002, Adv: 1.1487, Disc: 1.2107, Acc: 1.000)
+[2025-10-15 13:43:51] VRPTrainer.py(220) : Epoch  29: Train 288/10000(2.9%)   Score: 12.6310, Total: 0.3581 (VRP: -0.6881, Adv: 1.1499, Disc: 1.2116, Acc: 1.000)
+[2025-10-15 13:43:53] VRPTrainer.py(220) : Epoch  29: Train 320/10000(3.2%)   Score: 12.1502, Total: 0.3796 (VRP: -0.6669, Adv: 1.1502, Disc: 1.2119, Acc: 1.000)
+[2025-10-15 13:51:52] VRPTrainer.py(225) : Epoch  29: Train (100%)   Score: 11.0764, Total: 0.4014 (VRP: -0.6553, Adv: 1.1614, Disc: 1.2218, Acc: 1.000)
+[2025-10-15 13:51:52] VRPTrainer.py(155) : Epoch  29/100: Time Est.: Elapsed[8.26m], Remain[9.77h]
+[2025-10-15 13:51:53] VRPTrainer.py(136) : =================================================================
+[2025-10-15 14:00:01] VRPTrainer.py(225) : Epoch  30: Train (100%)   Score: 11.0253, Total: 0.4142 (VRP: -0.6605, Adv: 1.1811, Disc: 1.2381, Acc: 1.000)
+[2025-10-15 14:00:01] VRPTrainer.py(155) : Epoch  30/100: Time Est.: Elapsed[16.41m], Remain[9.57h]
+[2025-10-15 14:00:02] VRPTrainer.py(169) : Saving trained_model
+[2025-10-15 14:00:02] VRPTrainer.py(136) : =================================================================
+[2025-10-15 14:08:22] VRPTrainer.py(225) : Epoch  31: Train (100%)   Score: 11.1011, Total: 0.4380 (VRP: -0.6512, Adv: 1.1970, Disc: 1.2521, Acc: 1.000)
+[2025-10-15 14:08:22] VRPTrainer.py(155) : Epoch  31/100: Time Est.: Elapsed[24.75m], Remain[9.49h]
+[2025-10-15 14:08:22] VRPTrainer.py(136) : =================================================================
+[2025-10-15 14:16:38] VRPTrainer.py(225) : Epoch  32: Train (100%)   Score: 10.9332, Total: 0.4772 (VRP: -0.6252, Adv: 1.2115, Disc: 1.2645, Acc: 1.000)
+[2025-10-15 14:16:38] VRPTrainer.py(155) : Epoch  32/100: Time Est.: Elapsed[33.03m], Remain[9.36h]
+[2025-10-15 14:16:39] VRPTrainer.py(169) : Saving trained_model
+[2025-10-15 14:16:39] VRPTrainer.py(136) : =================================================================
+[2025-10-15 14:25:05] VRPTrainer.py(225) : Epoch  33: Train (100%)   Score: 10.8077, Total: 0.4929 (VRP: -0.6216, Adv: 1.2248, Disc: 1.2759, Acc: 1.000)
+[2025-10-15 14:25:05] VRPTrainer.py(155) : Epoch  33/100: Time Est.: Elapsed[41.47m], Remain[9.26h]
+[2025-10-15 14:25:05] VRPTrainer.py(136) : =================================================================
+[2025-10-15 14:33:33] VRPTrainer.py(225) : Epoch  34: Train (100%)   Score: 11.1834, Total: 0.4979 (VRP: -0.6261, Adv: 1.2353, Disc: 1.2856, Acc: 1.000)
+[2025-10-15 14:33:33] VRPTrainer.py(155) : Epoch  34/100: Time Est.: Elapsed[49.93m], Remain[9.15h]
+[2025-10-15 14:33:33] VRPTrainer.py(169) : Saving trained_model
+[2025-10-15 14:33:34] VRPTrainer.py(136) : =================================================================
+[2025-10-15 14:42:46] VRPTrainer.py(225) : Epoch  35: Train (100%)   Score: 11.4176, Total: 0.5262 (VRP: -0.6080, Adv: 1.2465, Disc: 1.2952, Acc: 1.000)
+[2025-10-15 14:42:46] VRPTrainer.py(155) : Epoch  35/100: Time Est.: Elapsed[59.15m], Remain[9.15h]
+[2025-10-15 14:42:46] VRPTrainer.py(136) : =================================================================
