@@ -1,3 +1,5 @@
+# (To replace your existing VRPTrainer class file content - only modified sections shown fully here)
+
 import math
 import torch
 import torch.nn as nn
@@ -67,7 +69,8 @@ class VRPTrainer:
         self.scheduler = Scheduler(self.optimizer_main, **self.optimizer_params['scheduler'])
 
         # --- adversarial base config ---
-        self.fixed_lambda = float(self.trainer_params.get('lambda_adv', 1.5))  # lambda_base
+        # fixed_lambda is the max multiplier; DANN-style annealing used below
+        self.fixed_lambda = float(self.trainer_params.get('lambda_adv', 1.0))  # keep modest default
         self.current_step = 0
 
         # compute total training steps
@@ -77,13 +80,13 @@ class VRPTrainer:
         steps_per_epoch = math.ceil(train_episodes / max(1, train_batch_size))
         self.total_train_steps = max(1, epochs * steps_per_epoch)
 
-        # --- Adaptive Control Parameters & smoothing/noise defaults ---
-        self.alpha_lambda = float(self.trainer_params.get('alpha_lambda', 1.5))
+        # NOTE: We keep the old adaptive params in the config for backward compatibility,
+        # but the new trainer uses simple DANN-style annealing only (no adaptive scaling).
+        self.alpha_lambda = float(self.trainer_params.get('alpha_lambda', 0.0))
         self.disc_steps_min = int(self.trainer_params.get('disc_steps_min', 1))
         self.disc_steps_max = int(self.trainer_params.get('disc_steps_max', 5))
 
-        # EMA smoothing for disc acc (used by adaptive decisions)
-        # Giữ 0.95 để duy trì sự ổn định.
+        # EMA smoothing for disc acc (kept for logging, not used to adapt lambda)
         self.running_momentum = float(self.trainer_params.get('running_momentum', 0.95)) 
         self.running_disc_acc = float(self.trainer_params.get('running_disc_acc_init', 0.5))
         
@@ -91,11 +94,12 @@ class VRPTrainer:
         self.label_smoothing = float(self.trainer_params.get('label_smoothing', 0.1))  # 0.0 means off
         self.enc_noise_std = float(self.trainer_params.get('enc_noise_std', 1e-3))    # gaussian std
 
-        # lambda schedule params
-        self.lambda_k = float(self.trainer_params.get('lambda_k', 10.0))
-        # Updated ramp fraction for slower Lambda growth (Stability)
+        # lambda schedule params (DANN-style)
+        self.lambda_k = float(self.trainer_params.get('lambda_k', 10.0))  # controls slope of sigmoid
+        # NOTE: lambda_ramp_fraction and lambda_smax are no longer used in the adaptive formula,
+        # but kept for backward-compatibility if you want to revert to the old behavior.
         self.lambda_ramp_fraction = float(self.trainer_params.get('lambda_ramp_fraction', 0.3)) 
-        self.lambda_smax = float(self.trainer_params.get('lambda_smax', 1.5))
+        self.lambda_smax = float(self.trainer_params.get('lambda_smax', 1.0))
 
         # safety / gradient clipping
         self.max_grad_norm = float(self.trainer_params.get('max_grad_norm', 1.0))
@@ -148,7 +152,8 @@ class VRPTrainer:
             self.result_log.append('loss_disc', epoch, avg_loss_disc)
             self.result_log.append('disc_acc', epoch, avg_disc_acc)
 
-            # Adaptive adjustment (use EMA smoothed acc inside)
+            # In this simplified trainer we do NOT adapt lambda dynamically.
+            # Keep _adjust_adversarial_balance as a placeholder (no-op) for now.
             self._adjust_adversarial_balance(avg_disc_acc)
 
             elapsed_time_str, remain_time_str = self.time_estimator.get_est_string(epoch, self.trainer_params['epochs'])
@@ -237,12 +242,14 @@ class VRPTrainer:
         self.model.pre_forward(reset_state)
         
         # -------------------------------
-        # lambda schedule (sigmoid with ramp fraction)
+        # lambda schedule (DANN-style sigmoid annealing)
         # -------------------------------
+        # p: progress in [0,1]
         p = float(self.current_step) / float(max(1, self.total_train_steps))
-        p_adj = min(1.0, p / max(1e-9, self.lambda_ramp_fraction))
-        schedule_val = (2.0 / (1.0 + math.exp(-self.lambda_k * p_adj))) - 1.0
-        lambda_scheduled = float(self.fixed_lambda) * schedule_val  # in [0, lambda_base]
+        # DANN style: g(p) = 2/(1 + exp(-k * p)) - 1
+        # lambda_p will smoothly increase from 0 -> fixed_lambda
+        schedule_val = (2.0 / (1.0 + math.exp(-self.lambda_k * p))) - 1.0
+        lambda_p = float(self.fixed_lambda) * schedule_val  # in [0, fixed_lambda]
 
         # -------------------------------
         # Train discriminator (with small noise + label smoothing)
@@ -291,21 +298,12 @@ class VRPTrainer:
         avg_disc_acc = float(acc_disc_correct) / float(max(1, acc_disc_total))
 
         # -------------------------------
-        # update running (EMA) disc acc for adaptive decisions
+        # update running (EMA) disc acc for logging only
         # -------------------------------
         initial_running_acc = float(self.trainer_params.get('running_disc_acc_init', 0.5))
         self.running_disc_acc = (self.running_momentum * getattr(self, 'running_disc_acc', initial_running_acc) +
                                  (1.0 - self.running_momentum) * avg_disc_acc)
-        use_disc_acc_for_adaptive = float(self.running_disc_acc)
-
-        # -------------------------------
-        # Adaptive lambda scaling (based on running acc)
-        # -------------------------------
-        scale_factor = 1.0 + self.alpha_lambda * (0.5 - use_disc_acc_for_adaptive)
-        scale_clamped = max(0.0, min(self.lambda_smax, scale_factor))
-        lambda_p = lambda_scheduled * scale_clamped
-        # final clamp to not exceed base and not negative
-        lambda_p = float(max(0.0, min(lambda_p, float(self.fixed_lambda))))
+        # Note: running_disc_acc kept for monitoring/logging. We DO NOT use it to adapt lambda here.
 
         # -------------------------------
         # VRP rollout (policy) - collect trajectory
@@ -318,7 +316,7 @@ class VRPTrainer:
             state, reward, done = self.env.step(selected)
             prob_list = torch.cat((prob_list, prob[:, :, None]), dim=2)
 
-        advantage = reward - reward.float().mean(dim=1, keepdims=True)
+        advantage = (reward - reward.float().mean(dim=1, keepdims=True)).detach()
         log_prob = prob_list.log().sum(dim=2)
         loss_vrp = (-advantage * log_prob).mean()
         loss_vrp_item = loss_vrp.item()
@@ -353,35 +351,10 @@ class VRPTrainer:
     # ---------------------------------------------------------------------
     def _adjust_adversarial_balance(self, disc_acc):
         """
-        Adaptive adjustment of disc_steps and discriminator learning rate.
-        FIXED: TIGHTENED thresholds significantly to force Disc Acc down from the 90%+ spikes.
-        Target EMA Acc region: 25% - 50%.
+        Simplified: no adaptive changes. Keep for backward-compatibility and logging.
+        If you want to re-enable adaptive control later, you can implement it here.
         """
-        prev_lr = float(self.optimizer_disc.param_groups[0]['lr'])
+        # Just log current discriminator EMA accuracy for monitoring
         use_acc = float(getattr(self, 'running_disc_acc', disc_acc))
-        
-        # Dampening factor (kept at 1.2x)
-        LR_CHANGE_FACTOR = 1.2 
-
-        # adaptive disc_steps
-        # Tăng steps nếu Acc > 50% (Disc quá mạnh, cần học chậm lại)
-        if use_acc > 0.50: 
-            self.disc_steps = min(self.disc_steps + 1, self.disc_steps_max)
-        # Giảm steps nếu Acc < 0.25 (Disc quá yếu, cần học nhanh hơn)
-        elif use_acc < 0.25:
-            self.disc_steps = max(self.disc_steps - 1, self.disc_steps_min)
-
-        # adaptive lr
-        new_lr = prev_lr
-        
-        # Reduce LR if Disc is too strong (Acc > 0.50) --> TIGHTENED THRESHOLD!
-        if use_acc > 0.50:
-            new_lr = max(prev_lr / LR_CHANGE_FACTOR, 1e-8)
-        # Increase LR if Disc is failing to learn (Acc < 0.25) --> TIGHTENED THRESHOLD!
-        elif use_acc < 0.25:
-            new_lr = min(prev_lr * LR_CHANGE_FACTOR, 1e-3)
-
-        for param_group in self.optimizer_disc.param_groups:
-            param_group['lr'] = new_lr
-
-        self.logger.debug(f"[Adaptive] Disc Steps: {self.disc_steps}, Disc LR: {new_lr:.2e}, EMA Acc: {use_acc:.3f}")
+        self.logger.debug(f"[Adversarial] Disc Steps: {self.disc_steps}, Disc LR: {self.optimizer_disc.param_groups[0]['lr']:.2e}, EMA Acc: {use_acc:.3f}")
+        return
