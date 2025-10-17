@@ -92,21 +92,21 @@ trainer_params = {
     },
     'model_load': {
         'enable': True, #Set True when run checkpoint
-        'path': 'result/20251015_180420_train_unified_n50_adv', 
-        'epoch': 8, #fix tuỳ theo cái đã chạy
+        'path': 'result/20251017_112658_train_unified_n50_adv', 
+        'epoch': 2, #fix tuỳ theo cái đã chạy
     },
 
      # === ADVERSARIAL CONTROL ===
-    'lambda_adv': 0.7,               # trọng số cơ bản của phần đối kháng
+    'lambda_adv': 0.5,               # trọng số cơ bản của phần đối kháng
     'alpha_lambda': 0.7,             # độ nhạy khi acc lệch khỏi 0.5
     'lambda_k': 10,                # tốc độ ramp-up của sigmoid (càng lớn càng nhanh)
-    'lambda_ramp_fraction': 0.3,     # tỉ lệ epoch đầu tiên dùng để tăng lambda
-    'lambda_smax': 1.0,              # giới hạn nhân của lambda (scale clamp)
+    #'lambda_ramp_fraction': 0.3,     # tỉ lệ epoch đầu tiên dùng để tăng lambda
+    #'lambda_smax': 1.0,              # giới hạn nhân của lambda (scale clamp)
     
     # === DISCRIMINATOR ADAPTIVE ===
     'disc_steps': 2,                 # số bước ban đầu train D
-    'disc_steps_min': 1,             # giới hạn dưới
-    'disc_steps_max': 5,             # giới hạn trên
+    #'disc_steps_min': 1,             # giới hạn dưới
+    #'disc_steps_max': 5,             # giới hạn trên
     'running_disc_acc_init': 0.5,    # khởi tạo EMA
     'running_momentum': 0.95,         # hệ số trơn EMA
     'max_grad_norm': 1.0,            # tránh gradient explosion
