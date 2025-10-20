@@ -105,8 +105,8 @@ trainer_params = {
     
     # === DISCRIMINATOR ADAPTIVE ===
     'disc_steps': 2,                 # số bước ban đầu train D
-    #'disc_steps_min': 1,             # giới hạn dưới
-    #'disc_steps_max': 5,             # giới hạn trên
+    'disc_steps_min': 1,             # giới hạn dưới
+    'disc_steps_max': 5,             # giới hạn trên
     'running_disc_acc_init': 0.5,    # khởi tạo EMA
     'running_momentum': 0.95,         # hệ số trơn EMA
     'max_grad_norm': 1.0,            # tránh gradient explosion
