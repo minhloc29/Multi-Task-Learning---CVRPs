@@ -152,8 +152,8 @@ class VRPTrainer:
             self.result_log.append('loss_disc', epoch, avg_loss_disc)
             self.result_log.append('disc_acc', epoch, avg_disc_acc)
 
-            # In this simplified trainer we do NOT adapt lambda dynamically.
-            # Keep _adjust_adversarial_balance as a placeholder (no-op) for now.
+            
+            # _adjust_adversarial_balance 
             self._adjust_adversarial_balance(avg_disc_acc)
 
             elapsed_time_str, remain_time_str = self.time_estimator.get_est_string(epoch, self.trainer_params['epochs'])
@@ -202,20 +202,31 @@ class VRPTrainer:
         train_num_episode = int(self.trainer_params['train_episodes'])
         episode = 0
         loop_cnt = 0
+
+        # NEW: dict to accumulate per-task scores across batches in this epoch
+        task_scores_dict = {}
+
         while episode < train_num_episode:
 
             remaining = train_num_episode - episode
             batch_size = min(int(self.trainer_params['train_batch_size']), remaining)
 
+            # NOTE: _train_one_batch now returns per_task_scores as the last element
             (avg_score, avg_loss_total, avg_loss_vrp,
-             avg_loss_adv, avg_loss_disc, avg_disc_acc) = self._train_one_batch(batch_size) 
-            
+             avg_loss_adv, avg_loss_disc, avg_disc_acc, per_task_scores) = self._train_one_batch(batch_size)
+
             score_AM.update(avg_score, batch_size)
             loss_AM.update(avg_loss_total, batch_size)
             loss_vrp_AM.update(avg_loss_vrp, batch_size)
             loss_adv_AM.update(avg_loss_adv, batch_size)
             loss_disc_AM.update(avg_loss_disc, batch_size)
             disc_acc_AM.update(avg_disc_acc, batch_size)
+
+            # NEW: accumulate per-task averages
+            for tid, val in per_task_scores.items():
+                # skip NaNs (task not present in this batch)
+                if val is not None and not (isinstance(val, float) and math.isnan(val)):
+                    task_scores_dict.setdefault(tid, []).append(float(val))
 
             episode += batch_size
 
@@ -232,7 +243,18 @@ class VRPTrainer:
             f"(VRP: {loss_vrp_AM.avg:.4f}, Adv: {loss_adv_AM.avg:.4f}, Disc: {loss_disc_AM.avg:.4f}, Acc: {disc_acc_AM.avg:.3f})"
         )
 
+        # NEW: print per-task mean scores for this epoch
+        if task_scores_dict:
+            self.logger.info("---- Mean Score per Task (Train) ----")
+            for tid in sorted(task_scores_dict.keys()):
+                vals = task_scores_dict[tid]
+                mean_score_t = sum(vals) / len(vals)
+                self.logger.info(f"Task {tid}: mean score = {mean_score_t:.4f}")
+        else:
+            self.logger.info("---- Mean Score per Task (Train): no task-level data collected this epoch ----")
+
         return score_AM.avg, loss_AM.avg, loss_vrp_AM.avg, loss_adv_AM.avg, loss_disc_AM.avg, disc_acc_AM.avg
+
 
     # ---------------------------------------------------------------------
     def _train_one_batch(self, batch_size):
@@ -303,7 +325,7 @@ class VRPTrainer:
         initial_running_acc = float(self.trainer_params.get('running_disc_acc_init', 0.5))
         self.running_disc_acc = (self.running_momentum * getattr(self, 'running_disc_acc', initial_running_acc) +
                                  (1.0 - self.running_momentum) * avg_disc_acc)
-        # Note: running_disc_acc kept for monitoring/logging. We DO NOT use it to adapt lambda here.
+        use_disc_acc_for_adaptive = float(self.running_disc_acc)
 
         # -------------------------------
         # VRP rollout (policy) - collect trajectory
@@ -345,16 +367,66 @@ class VRPTrainer:
         max_pomo_reward, _ = reward.max(dim=1)
         score_mean = -max_pomo_reward.float().mean()
 
-        # return metrics: score, total loss, vrp loss, adv loss, disc loss, disc acc (raw epoch avg)
-        return score_mean.item(), loss_total.item(), loss_vrp_item, loss_adv_item, avg_loss_disc, avg_disc_acc
+        # ==== Per-task score computation (NEW) ====
+        # task_labels: shape (batch,)
+        # max_pomo_reward: shape (batch,)
+        try:
+            task_ids_np = task_labels.detach().cpu().numpy()
+            task_scores_np = -max_pomo_reward.detach().cpu().numpy()  # convert to positive score (score = -reward)
+        except Exception:
+            # fallback if CPU transfer fails (shouldn't normally happen)
+            task_ids_np = task_labels.detach().clone().cpu().numpy()
+            task_scores_np = -max_pomo_reward.detach().clone().cpu().numpy()
+
+        per_task_scores = {}
+        if task_ids_np.size > 0:
+            max_tid_in_batch = int(task_ids_np.max())
+            for tid in range(max_tid_in_batch + 1):
+                mask = (task_ids_np == tid)
+                if mask.any():
+                    per_task_scores[tid] = float(task_scores_np[mask].mean())
+                else:
+                    per_task_scores[tid] = float('nan')
+        else:
+            # no samples? shouldn't happen but keep safe
+            per_task_scores = {}
+
+        # return metrics: score, total loss, vrp loss, adv loss, disc loss, disc acc, per_task_scores (NEW)
+        return score_mean.item(), loss_total.item(), loss_vrp_item, loss_adv_item, avg_loss_disc, avg_disc_acc, per_task_scores
+
 
     # ---------------------------------------------------------------------
     def _adjust_adversarial_balance(self, disc_acc):
         """
-        Simplified: no adaptive changes. Keep for backward-compatibility and logging.
-        If you want to re-enable adaptive control later, you can implement it here.
+        Adaptive adjustment of disc_steps and discriminator learning rate.
+        FIXED: TIGHTENED thresholds significantly to force Disc Acc down from the 90%+ spikes.
+        Target EMA Acc region: 25% - 50%.
         """
-        # Just log current discriminator EMA accuracy for monitoring
+        prev_lr = float(self.optimizer_disc.param_groups[0]['lr'])
         use_acc = float(getattr(self, 'running_disc_acc', disc_acc))
-        self.logger.debug(f"[Adversarial] Disc Steps: {self.disc_steps}, Disc LR: {self.optimizer_disc.param_groups[0]['lr']:.2e}, EMA Acc: {use_acc:.3f}")
-        return
+        
+        # Dampening factor (kept at 1.2x)
+        LR_CHANGE_FACTOR = 1.2 
+
+        # adaptive disc_steps
+        # Tăng steps nếu Acc > 50% (Disc quá mạnh, cần học chậm lại)
+        if use_acc > 0.50: 
+            self.disc_steps = min(self.disc_steps + 1, self.disc_steps_max)
+        # Giảm steps nếu Acc < 0.25 (Disc quá yếu, cần học nhanh hơn)
+        elif use_acc < 0.25:
+            self.disc_steps = max(self.disc_steps - 1, self.disc_steps_min)
+
+        # adaptive lr
+        new_lr = prev_lr
+        
+        # Reduce LR if Disc is too strong (Acc > 0.50) --> TIGHTENED THRESHOLD!
+        if use_acc > 0.50:
+            new_lr = max(prev_lr / LR_CHANGE_FACTOR, 1e-8)
+        # Increase LR if Disc is failing to learn (Acc < 0.25) --> TIGHTENED THRESHOLD!
+        elif use_acc < 0.25:
+            new_lr = min(prev_lr * LR_CHANGE_FACTOR, 1e-3)
+
+        for param_group in self.optimizer_disc.param_groups:
+            param_group['lr'] = new_lr
+
+        self.logger.debug(f"[Adaptive] Disc Steps: {self.disc_steps}, Disc LR: {new_lr:.2e}, EMA Acc: {use_acc:.3f}")
