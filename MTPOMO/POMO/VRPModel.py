@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -184,6 +183,11 @@ class MultiHeadAttention(nn.Module):
         head_num = model_params['head_num']
         qkv_dim = model_params['qkv_dim']
         
+        # store for later use
+        self.head_num = head_num
+        self.qkv_dim = qkv_dim
+        self.embedding_dim = embedding_dim
+
         # QKV Projection (Generic cho Encoder)
         self.Wq = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
         self.Wk = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
@@ -194,7 +198,7 @@ class MultiHeadAttention(nn.Module):
     def forward(self, q, k, v, mask=None):
         # q, k, v shape: (batch, N, embedding)
         
-        head_num = self.Wq.out_features // self.Wq.in_features
+        head_num = self.head_num
         
         q_reshaped = reshape_by_heads(self.Wq(q), head_num=head_num)
         k_reshaped = reshape_by_heads(self.Wk(k), head_num=head_num)
@@ -269,7 +273,7 @@ class VRP_Encoder(nn.Module):
 
 
 ########################################
-# DECODER (Giữ nguyên)
+# DECODER (Giữ nguyên, với vài sửa nhỏ)
 ########################################
 
 class VRP_Decoder(nn.Module):
@@ -329,13 +333,25 @@ class VRP_Decoder(nn.Module):
         # shape: (batch, pomo, problem+1)
 
         # safety guards: prevent division by zero / nan
-        sqrt_embedding_dim = float(self.model_params.get('sqrt_embedding_dim', 1.0))
-        if sqrt_embedding_dim == 0 or torch.isnan(torch.tensor(sqrt_embedding_dim)):
-            sqrt_embedding_dim = 1.0
+        sqrt_embedding_dim = self.model_params.get('sqrt_embedding_dim', None)
+        if sqrt_embedding_dim is None:
+            # fallback to sqrt of qkv_dim * head_num (or embedding dim)
+            qkv_dim = float(self.model_params.get('qkv_dim', 1.0))
+            head_num = float(self.model_params.get('head_num', 1.0))
+            sqrt_embedding_dim = math.sqrt(max(1.0, qkv_dim))  # conservative
+        else:
+            # ensure it's a float and reasonable
+            try:
+                sqrt_embedding_dim = float(sqrt_embedding_dim)
+            except Exception:
+                sqrt_embedding_dim = 1.0
+            if sqrt_embedding_dim == 0 or math.isnan(sqrt_embedding_dim):
+                sqrt_embedding_dim = 1.0
 
         score_scaled = score / sqrt_embedding_dim
         # shape: (batch, pomo, problem+1)
 
+        # clipping + tanh as before
         score_clipped = float(self.model_params.get('logit_clipping', 10.0)) * torch.tanh(score_scaled)
 
         # add mask (ninf_mask may contain -inf or large negative numbers)
@@ -345,11 +361,13 @@ class VRP_Decoder(nn.Module):
         # use a large negative for -inf-like values so softmax ~ 0 there
         score_masked = torch.nan_to_num(score_masked, nan=-1e9, posinf=1e9, neginf=-1e9)
 
-        # numerical stable softmax: clamp, softmax, then renormalize to avoid all-zero rows
-        # small eps to prevent zero-prob rows
+        # numerical stable softmax: subtract max, softmax, then renormalize to avoid all-zero rows
         EPS = 1e-12
-        # compute softmax
-        probs = F.softmax(score_masked, dim=2)
+        # subtract max for numerical stability
+        max_per_row = torch.max(score_masked, dim=-1, keepdim=True)[0]
+        score_stable = score_masked - max_per_row
+
+        probs = F.softmax(score_stable, dim=-1)
         # replace possible nan/inf after softmax (shouldn't happen, but safe)
         probs = torch.nan_to_num(probs, nan=0.0, posinf=0.0, neginf=0.0)
 
@@ -359,7 +377,7 @@ class VRP_Decoder(nn.Module):
         # if some rows sum to zero (all masked), give tiny uniform mass to avoid multinomial error
         zero_mask = (row_sums <= 0.0)
         if zero_mask.any():
-            # create tiny uniform mass for those rows
+            # create tiny uniform mass for those rows (device-safe)
             uniform = torch.full_like(probs, EPS)
             probs = torch.where(zero_mask.expand_as(probs), uniform, probs)
             row_sums = probs.sum(dim=2, keepdim=True)
@@ -371,7 +389,7 @@ class VRP_Decoder(nn.Module):
 
 
 ########################################
-# NN SUB CLASS / FUNCTIONS (Giữ nguyên)
+# NN SUB CLASS / FUNCTIONS (Giữ nguyên, chỉ chỉnh multi-head core)
 ########################################
 
 def reshape_by_heads(qkv, head_num):
@@ -390,6 +408,9 @@ def reshape_by_heads(qkv, head_num):
 
 
 def multi_head_attention(q, k, v, rank2_ninf_mask=None, rank3_ninf_mask=None):
+    # q: (batch, head_num, n, key_dim)
+    # k: (batch, head_num, input_s, key_dim)
+    # v: (batch, head_num, input_s, key_dim)
     batch_s = q.size(0)
     head_num = q.size(1)
     n = q.size(2)
@@ -405,6 +426,7 @@ def multi_head_attention(q, k, v, rank2_ninf_mask=None, rank3_ninf_mask=None):
     if key_dim_val <= 0:
         key_dim_val = 1.0
 
+    # scale
     score_scaled = score / math.sqrt(key_dim_val)
 
     # apply masks if present (they may contain -inf)
@@ -416,8 +438,11 @@ def multi_head_attention(q, k, v, rank2_ninf_mask=None, rank3_ninf_mask=None):
     # sanitize possible inf/nan in score before softmax
     score_scaled = torch.nan_to_num(score_scaled, nan=-1e9, posinf=1e9, neginf=-1e9)
 
-    # stable softmax on last dim
-    weights = nn.Softmax(dim=3)(score_scaled)
+    # stable softmax on last dim: subtract max per row first
+    max_per_row = torch.max(score_scaled, dim=-1, keepdim=True)[0]
+    score_stable = score_scaled - max_per_row
+
+    weights = F.softmax(score_stable, dim=-1)
     weights = torch.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
     weights = weights.clamp(min=0.0)
 
