@@ -15,7 +15,6 @@ class GradientReversalFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        # Trả về -lambda * grad_output, None (cho lambda_)
         return -ctx.lambda_ * grad_output, None
 
 
@@ -28,28 +27,74 @@ class GradientReversal(torch.nn.Module):
         return GradientReversalFunction.apply(x, self.lambda_)
 
 ########################################
-# TASK DISCRIMINATOR (Cải thiện)
+# TASK DISCRIMINATOR
 ########################################
 
 class TaskDiscriminator(nn.Module):
     def __init__(self, embedding_dim, hidden=128, num_tasks=5, lambda_=1.0, dropout=0.3):
         super().__init__()
-        # GRL sẽ được áp dụng nếu reverse=True
         self.grl = GradientReversal(lambda_) 
         self.net = nn.Sequential(
             nn.Linear(embedding_dim, hidden),
             nn.ReLU(),
-            nn.Dropout(dropout),  # ✅ Thêm dropout để tránh overfit
+            nn.Dropout(dropout),
             nn.Linear(hidden, num_tasks)
         )
 
     def forward(self, enc, reverse=False):
-        # Lấy trung bình embedding của tất cả các node (Depot + Customers)
-        pooled = enc.mean(dim=1)  # [batch, embedding]
+        pooled = enc.mean(dim=1)
         if reverse:
-            # Chỉ áp dụng GRL khi huấn luyện Encoder (Adversarial)
             pooled = self.grl(pooled)
-        return self.net(pooled)  # [batch, num_tasks]
+        return self.net(pooled)
+
+########################################
+# DYNAMIC FILM ADAPTER (task-conditioned)
+########################################
+
+class DynamicFilmAdapter(nn.Module):
+    """
+    Task-conditioned FiLM Adapter
+    Sinh gamma, beta từ embedding task thay vì lookup.
+    Hợp với unseen tasks.
+    """
+    def __init__(self, num_tasks, embedding_dim, task_embed_dim=64, hidden_dim=128):
+        super().__init__()
+        self.num_tasks = num_tasks
+        self.embedding_dim = embedding_dim
+        self.task_embed_dim = task_embed_dim
+
+        # Mạng sinh gamma/beta từ task embedding
+        self.gamma_gen = nn.Sequential(
+            nn.Linear(task_embed_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, embedding_dim)
+        )
+        self.beta_gen = nn.Sequential(
+            nn.Linear(task_embed_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, embedding_dim)
+        )
+
+        # Bảng embedding cho task (train)
+        self.task_embeddings = nn.Embedding(num_tasks, task_embed_dim)
+
+    def forward(self, x, task_labels=None, task_features=None):
+        """
+        task_labels: (batch,) - dùng khi train
+        task_features: (batch, task_embed_dim) - dùng khi test unseen task
+        """
+        if task_features is not None:
+            task_embed = task_features
+        elif task_labels is not None:
+            task_embed = self.task_embeddings(task_labels)
+        else:
+            # Không có thông tin task => bỏ modulation
+            return x
+
+        gamma = self.gamma_gen(task_embed).unsqueeze(1)  # (batch, 1, emb)
+        beta = self.beta_gen(task_embed).unsqueeze(1)
+        return gamma * x + beta
+
 
 ########################################
 # MAIN MODEL
@@ -60,120 +105,88 @@ class VRPModel(nn.Module):
     def __init__(self, num_tasks=5, **model_params):
         super().__init__()
         self.model_params = model_params
+        self.num_tasks = num_tasks
 
-        self.encoder = VRP_Encoder(**model_params)
-        self.decoder = VRP_Decoder(**model_params)
+        self.encoder = VRP_Encoder(num_tasks=num_tasks, **model_params)
+        self.decoder = VRP_Decoder(num_tasks=num_tasks, **model_params)
         self.discriminator = TaskDiscriminator(
             embedding_dim=model_params['embedding_dim'],
             num_tasks=num_tasks,
-            dropout=model_params.get('discriminator_dropout', 0.3)  # ✅ Có thể config từ ngoài
+            dropout=model_params.get('discriminator_dropout', 0.3)
         )
-        # Các biến trạng thái để lưu trữ encoded nodes
-        self.encoded_nodes = None
-        # shape: (batch, problem+1, EMBEDDING_DIM)
 
-    def pre_forward(self, reset_state): # get from VRPEnv.py
+        self.encoded_nodes = None
+
+    def pre_forward(self, reset_state):
         depot_xy = reset_state.depot_xy
         node_xy = reset_state.node_xy
         node_demand = reset_state.node_demand
         node_earlyTW = reset_state.node_earlyTW
         node_lateTW = reset_state.node_lateTW
 
-        # Chuẩn bị input features cho Encoder: (x, y, demand, earlyTW, lateTW)
         node_xy_demand = torch.cat((node_xy, node_demand[:, :, None]), dim=2)
-        node_TW = torch.cat((node_earlyTW[:, :, None],node_lateTW[:, :, None]),dim=2)
-        node_xy_demand_TW = torch.cat((node_xy_demand,node_TW),dim=2)
-        # shape: (batch, problem, 5)
+        node_TW = torch.cat((node_earlyTW[:, :, None], node_lateTW[:, :, None]), dim=2)
+        node_xy_demand_TW = torch.cat((node_xy_demand, node_TW), dim=2)
 
         self.encoded_nodes = self.encoder(depot_xy, node_xy_demand_TW)
-        # shape: (batch, problem+1, embedding)
         self.decoder.set_kv(self.encoded_nodes)
 
     def forward(self, state, task_labels=None, adversarial=False):
-        """
-        Forward pass cho VRP model.
-        """
-
-        # --- Xử lý trạng thái chưa khởi tạo (bước đầu tiên) ---
         if state.BATCH_IDX is None or state.POMO_IDX is None:
             batch_size = self.encoded_nodes.size(0)
-            pomo_size = self.encoded_nodes.size(1) - 1  # exclude depot
+            pomo_size = self.encoded_nodes.size(1) - 1
             selected = torch.zeros(size=(batch_size, pomo_size), dtype=torch.long)
             prob = torch.ones(size=(batch_size, pomo_size))
             return selected, prob
 
-        # --- Trạng thái bình thường (từ bước thứ 2 trở đi) ---
         batch_size = state.BATCH_IDX.size(0)
         pomo_size = state.BATCH_IDX.size(1)
 
         if state.selected_count == 0:
-            # Bước 1: Luôn chọn Depot (node 0)
             selected = torch.zeros(size=(batch_size, pomo_size), dtype=torch.long)
             prob = torch.ones(size=(batch_size, pomo_size))
 
         elif state.selected_count == 1:
-            # Bước 2: Bắt đầu từ các node 1...Pomo_Size
             selected = torch.arange(start=1, end=pomo_size + 1)[None, :].expand(batch_size, pomo_size)
             prob = torch.ones(size=(batch_size, pomo_size))
 
         else:
-            # --- Lấy embedding của node cuối cùng đã chọn ---
             encoded_last_node = _get_encoding(self.encoded_nodes, state.current_node)
-            # shape: (batch, pomo, embedding)
-
-            # --- Decoder tính xác suất ---
             probs = self.decoder(
                 encoded_last_node,
                 state.load,
                 state.time,
                 state.length,
                 state.route_open,
-                ninf_mask=state.ninf_mask
+                ninf_mask=state.ninf_mask,
+                task_labels=task_labels
             )
-            # shape: (batch, pomo, problem+1)
-
-            if self.training or self.model_params['eval_type'] == 'softmax':
-                while True:  # Tránh lỗi zero-probability của multinomial
+            if self.training or self.model_params.get('eval_type', '') == 'softmax':
+                while True:
                     with torch.no_grad():
-                      # đảm bảo probs đã được xử lý bên trong decoder (softmax, nan->0, renorm)
-                      probs_flat = probs.reshape(batch_size * pomo_size, -1)
-                      # clamp + renormalize again to be extra-safe
-                      probs_flat = probs_flat.clamp(min=1e-12)
-                      probs_flat = probs_flat / probs_flat.sum(dim=1, keepdim=True)
-
-                      selected_flat = probs_flat.multinomial(1).squeeze(dim=1)
-                      selected = selected_flat.reshape(batch_size, pomo_size)
-
-                    # Lấy xác suất của node đã chọn (an toàn)
+                        probs_flat = probs.reshape(batch_size * pomo_size, -1)
+                        probs_flat = probs_flat.clamp(min=1e-12)
+                        probs_flat = probs_flat / probs_flat.sum(dim=1, keepdim=True)
+                        selected_flat = probs_flat.multinomial(1).squeeze(dim=1)
+                        selected = selected_flat.reshape(batch_size, pomo_size)
                     prob = probs.gather(dim=2, index=selected.unsqueeze(2)).squeeze(2)
-                    # nếu vẫn có phần tử 0, thay bằng epsilon nhỏ
                     prob = prob.clamp(min=1e-12)
                     if (prob != 0).all():
                         break
             else:
-                # Đánh giá: Chọn node có xác suất cao nhất
                 selected = probs.argmax(dim=2)
-                prob = None  # Không cần xác suất
-
+                prob = None
         return selected, prob
 
 def _get_encoding(encoded_nodes, node_index_to_pick):
-    # Dùng gather để lấy embedding của node dựa trên chỉ số
     batch_size = node_index_to_pick.size(0)
     pomo_size = node_index_to_pick.size(1)
     embedding_dim = encoded_nodes.size(2)
-
     gathering_index = node_index_to_pick[:, :, None].expand(batch_size, pomo_size, embedding_dim)
-    # shape: (batch, pomo, embedding)
-
-    picked_nodes = encoded_nodes.gather(dim=1, index=gathering_index)
-    # shape: (batch, pomo, embedding)
-
-    return picked_nodes
-
+    return encoded_nodes.gather(dim=1, index=gathering_index)
 
 ########################################
-# TRANSFORMER ENCODER (Mới)
+# TRANSFORMER ENCODER + DYNAMIC FILM ADAPTER
 ########################################
 
 class MultiHeadAttention(nn.Module):
@@ -182,104 +195,74 @@ class MultiHeadAttention(nn.Module):
         embedding_dim = model_params['embedding_dim']
         head_num = model_params['head_num']
         qkv_dim = model_params['qkv_dim']
-        
-        # store for later use
         self.head_num = head_num
         self.qkv_dim = qkv_dim
         self.embedding_dim = embedding_dim
-
-        # QKV Projection (Generic cho Encoder)
         self.Wq = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
         self.Wk = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
         self.Wv = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
-
         self.multi_head_combine = nn.Linear(head_num * qkv_dim, embedding_dim)
 
     def forward(self, q, k, v, mask=None):
-        # q, k, v shape: (batch, N, embedding)
-        
-        head_num = self.head_num
-        
-        q_reshaped = reshape_by_heads(self.Wq(q), head_num=head_num)
-        k_reshaped = reshape_by_heads(self.Wk(k), head_num=head_num)
-        v_reshaped = reshape_by_heads(self.Wv(v), head_num=head_num)
-
-        # Transformer Attention (Fully Connected)
-        out_concat = multi_head_attention(
-            q_reshaped, k_reshaped, v_reshaped, rank2_ninf_mask=mask
-        )
-        
-        return self.multi_head_combine(out_concat) # (batch, N, embedding)
-
+        q_reshaped = reshape_by_heads(self.Wq(q), self.head_num)
+        k_reshaped = reshape_by_heads(self.Wk(k), self.head_num)
+        v_reshaped = reshape_by_heads(self.Wv(v), self.head_num)
+        out_concat = multi_head_attention(q_reshaped, k_reshaped, v_reshaped, rank2_ninf_mask=mask)
+        return self.multi_head_combine(out_concat)
 
 class EncoderLayer(nn.Module):
     def __init__(self, **model_params):
         super().__init__()
-        
-        # 1. Multi-Head Attention (MHA)
         self.mha = MultiHeadAttention(**model_params)
         self.norm1 = AddAndBatchNormalization(**model_params)
-        
-        # 2. Feed-Forward Network (FFN)
         self.ffn = FeedForward(**model_params)
         self.norm2 = AddAndBatchNormalization(**model_params)
 
     def forward(self, x):
-        # x.shape: (batch, N, embedding)
-        
-        # MHA Block: MHA + Residual + Norm
         mha_out = self.mha(x, x, x, mask=None)
         x = self.norm1(x, mha_out)
-        
-        # FFN Block: FFN + Residual + Norm
         ffn_out = self.ffn(x)
         x = self.norm2(x, ffn_out)
-        
-        return x # (batch, N, embedding)
-
+        return x
 
 class VRP_Encoder(nn.Module):
-    def __init__(self, **model_params):
+    def __init__(self, num_tasks=5, **model_params):
         super().__init__()
         self.model_params = model_params
         embedding_dim = model_params['embedding_dim']
         encoder_layer_num = model_params['encoder_layer_num']
-
-        # Node feature embeddings
         self.embedding_depot = nn.Linear(2, embedding_dim)
         self.embedding_node = nn.Linear(5, embedding_dim)
+        self.layers = nn.ModuleList([EncoderLayer(**model_params) for _ in range(encoder_layer_num)])
+        self.film_adapter = DynamicFilmAdapter(num_tasks, embedding_dim)
 
-        # Stack multiple Transformer Encoder Layers (Mới)
-        self.layers = nn.ModuleList([
-            EncoderLayer(**model_params)
-            for _ in range(encoder_layer_num)
-        ])
-
-    def forward(self, depot_xy, node_xy_demand_TW):
-        """
-        depot_xy: (batch, 1, 2)
-        node_xy_demand_TW: (batch, problem, 5)
-        """
-        # Embed features
+    def forward(self, depot_xy, node_xy_demand_TW, task_labels=None):
         depot_emb = self.embedding_depot(depot_xy)
         node_emb = self.embedding_node(node_xy_demand_TW)
-        x = torch.cat((depot_emb, node_emb), dim=1)  # (batch, problem+1, emb)
-
-        # Pass through Transformer layers
+        x = torch.cat((depot_emb, node_emb), dim=1)
         for layer in self.layers:
-            x = layer(x) # Không cần adj_mask nữa
+            x = layer(x)
+        # Áp dụng Film Adapter sau cùng
+        x = self.film_adapter(x, task_labels)
+        return x
 
-        return x  # (batch, problem+1, embedding)
+########################################
+# PHẦN CÒN LẠI GIỮ NGUYÊN (Decoder, util)
+########################################
+# Giữ nguyên VRP_Decoder và các hàm reshape_by_heads, multi_head_attention, AddAndBatchNormalization, FeedForward
+# (Bạn có thể copy phần đó y hệt như trong file hiện tại của bạn)
+
 
 
 ########################################
-# DECODER (Giữ nguyên, với vài sửa nhỏ)
+# DECODER (Giữ nguyên, với adapter task-specific nhỏ)
 ########################################
 
 class VRP_Decoder(nn.Module):
-    def __init__(self, **model_params):
+    def __init__(self, num_tasks=0, **model_params):
         super().__init__()
         self.model_params = model_params
+        self.num_tasks = int(num_tasks)
         embedding_dim = self.model_params['embedding_dim']
         head_num = self.model_params['head_num']
         qkv_dim = self.model_params['qkv_dim']
@@ -290,6 +273,18 @@ class VRP_Decoder(nn.Module):
         self.Wv = nn.Linear(embedding_dim, head_num * qkv_dim, bias=False)
 
         self.multi_head_combine = nn.Linear(head_num * qkv_dim, embedding_dim)
+
+        # Task-specific adapters (lightweight). Only created if num_tasks > 0
+        if self.num_tasks > 0:
+            adapters = []
+            for _ in range(self.num_tasks):
+                adapters.append(nn.Sequential(
+                    nn.Linear(embedding_dim, embedding_dim),
+                    nn.ReLU()
+                ))
+            self.task_adapters = nn.ModuleList(adapters)
+        else:
+            self.task_adapters = None
 
         self.k = None  # saved key, for multi-head attention
         self.v = None  # saved value, for multi-head_attention
@@ -305,7 +300,7 @@ class VRP_Decoder(nn.Module):
         self.single_head_key = encoded_nodes.transpose(1, 2)
         # shape: (batch, embedding, problem+1)
 
-    def forward(self, encoded_last_node, load, time, length, route_open, ninf_mask):
+    def forward(self, encoded_last_node, load, time, length, route_open, ninf_mask, task_labels=None):
         # encoded_last_node.shape: (batch, pomo, embedding)
 
         head_num = self.model_params['head_num']
@@ -326,6 +321,43 @@ class VRP_Decoder(nn.Module):
 
         mh_atten_out = self.multi_head_combine(out_concat)
         # shape: (batch, pomo, embedding)
+
+        # -----------------------
+        # Task Adapter application
+        # -----------------------
+        # If adapters exist and task_labels provided, apply per-sample adapter
+        if (self.task_adapters is not None) and (task_labels is not None):
+            # Accept task_labels shape: (batch,) or (batch, pomo)
+            # Normalize to (batch,) — prefer one task per sample (batch element)
+            if task_labels.dim() == 2 and task_labels.size(1) == mh_atten_out.size(1):
+                # already (batch, pomo) - reduce to (batch,) assuming same task across pomo, else take first col
+                task_labels_batch = task_labels[:, 0].long()
+            else:
+                task_labels_batch = task_labels.view(-1).long()
+
+            batch_s = mh_atten_out.size(0)
+            pomo_s = mh_atten_out.size(1)
+            emb = mh_atten_out.size(2)
+
+            # Create output tensor
+            adapted_out = torch.zeros_like(mh_atten_out)
+
+            # Loop over batch to apply adapter for each sample.
+            # This is simple and efficient when num_tasks is small and batch moderate.
+            for i in range(batch_s):
+                t_id = int(task_labels_batch[i].item())
+                if 0 <= t_id < self.num_tasks:
+                    # apply adapter for sample i
+                    # note: adapter expects (batch=1, pomo, embedding) -> we slice and unsqueeze
+                    sample_out = mh_atten_out[i:i+1]  # (1, pomo, emb)
+                    adapted_sample = self.task_adapters[t_id](sample_out)  # (1, pomo, emb)
+                    adapted_out[i] = adapted_sample.squeeze(0)
+                else:
+                    # invalid id -> leave unchanged
+                    adapted_out[i] = mh_atten_out[i]
+
+            mh_atten_out = adapted_out
+        # else: no adapters or no task_labels -> keep mh_atten_out as-is
 
         #  Single-Head Attention, for probability calculation
         #######################################################
