@@ -10,17 +10,42 @@ from utils import *
 
 def args2dict(args):
     env_params = {"problem_size": args.problem_size, "pomo_size": args.pomo_size}
+    
     model_params = {"embedding_dim": args.embedding_dim, "sqrt_embedding_dim": args.sqrt_embedding_dim,
                     "encoder_layer_num": args.encoder_layer_num, "decoder_layer_num": args.decoder_layer_num,
                     "qkv_dim": args.qkv_dim, "head_num": args.head_num, "logit_clipping": args.logit_clipping,
                     "ff_hidden_dim": args.ff_hidden_dim, "num_experts": args.num_experts, "eval_type": args.eval_type,
                     "norm": args.norm, "norm_loc": args.norm_loc, "expert_loc": args.expert_loc, "problem": args.problem,
-                    "topk": args.topk, "routing_level": args.routing_level, "routing_method": args.routing_method}
-    optimizer_params = {"optimizer": {"lr": args.lr, "weight_decay": args.weight_decay},
+                    "topk": args.topk, "routing_level": args.routing_level, "routing_method": args.routing_method, 
+                    "slot_num": args.slot_num, "slot_iter_num": args.slot_iter_num,
+                    
+                    # --- PHẦN BỔ SUNG BỊ THIẾU ---
+                    "use_diffusion_refiner": args.use_diffusion_refiner,
+                    "refiner_timesteps": args.refiner_timesteps,
+                    "refiner_hidden_dim": args.refiner_hidden_dim,
+                    "refiner_noise_scale": args.refiner_noise_scale
+                    # --- KẾT THÚC BỔ SUNG ---
+                   }
+    
+    optimizer_params = {"optimizer": {"lr": args.lr, 
+                                     "weight_decay": args.weight_decay,
+                                     # --- PHẦN BỔ SUNG BỊ THIẾU ---
+                                     "lr_phase2": args.lr_phase2,
+                                     "lr_phase3": args.lr_phase3
+                                     # --- KẾT THÚC BỔ SUNG ---
+                                    },
                         "scheduler": {"milestones": args.milestones, "gamma": args.gamma}}
+    
     trainer_params = {"epochs": args.epochs, "train_episodes": args.train_episodes,
                       "train_batch_size": args.train_batch_size, "validation_interval": args.validation_interval,
-                      "model_save_interval": args.model_save_interval, "checkpoint": args.checkpoint}
+                      "model_save_interval": args.model_save_interval, "checkpoint": args.checkpoint,
+                      
+                      # --- PHẦN BỔ SUNG BỊ THIẾU ---
+                      "phase1_epochs": args.phase1_epochs,
+                      "phase2_epochs": args.phase2_epochs,
+                      "lambda_recon": args.lambda_recon
+                      # --- KẾT THÚC BỔ SUNG ---
+                     }
 
     return env_params, model_params, optimizer_params, trainer_params
 
@@ -31,8 +56,8 @@ if __name__ == "__main__":
     parser.add_argument('--problem', type=str, default="Train_ALL", choices=["Train_ALL", "CVRP", "OVRP", "VRPB", "VRPL", "VRPTW", "OVRPTW",
                                                                              "OVRPB", "OVRPL", "VRPBL", "VRPBTW", "VRPLTW",
                                                                              "OVRPBL", "OVRPBTW", "OVRPLTW", "VRPBLTW", "OVRPBLTW"])
-    parser.add_argument('--problem_size', type=int, default=100)
-    parser.add_argument('--pomo_size', type=int, default=100, help="the number of start node, should <= problem size")
+    parser.add_argument('--problem_size', type=int, default=50)
+    parser.add_argument('--pomo_size', type=int, default=50, help="the number of start node, should <= problem size")
 
     # model_params
     parser.add_argument('--model_type', type=str, default="MOE_LIGHT", choices=["SINGLE", "MTL", "MOE", "MOE_LIGHT"])
@@ -52,20 +77,35 @@ if __name__ == "__main__":
     parser.add_argument('--expert_loc', type=str, nargs='+', default=['Enc0', 'Enc1', 'Enc2', 'Enc3', 'Enc4', 'Enc5', 'Dec'], help="where to use MOE")
     parser.add_argument('--routing_level', type=str, default="node", choices=["node", "instance", "problem"], help="routing level for MOE")
     parser.add_argument('--routing_method', type=str, default="input_choice", choices=["input_choice", "expert_choice", "soft_moe", "random"], help="only for token-level and instance-level routing")
+    parser.add_argument('--slot_num', type=int, default="16")
+    parser.add_argument('--slot_iter_num', type=int, default="3")
+    
+    # === THÊM VÀO ĐÂY ===
+    parser.add_argument('--use_diffusion_refiner', action='store_true', help="Enable Diffusion Refiner")
+    parser.add_argument('--refiner_timesteps', type=int, default=10, help="Number of timesteps for Refiner")
+    parser.add_argument('--refiner_hidden_dim', type=int, default=256, help="Hidden dim for Refiner's denoiser")
+    parser.add_argument('--refiner_noise_scale', type=float, default=0.1, help="Noise scale for refinement")
+    # ====================
 
     # optimizer_params
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr_phase2', type=float, default=1e-4, help="Learning rate for Phase 2 (SL Refiner)")
+    parser.add_argument('--lr_phase3', type=float, default=1e-5, help="Learning rate for Phase 3 (RL Refiner)")
     parser.add_argument('--weight_decay', type=float, default=1e-6)
     parser.add_argument('--milestones', type=int, nargs='+', default=[4501, ], help='when to decay lr')
     parser.add_argument('--gamma', type=float, default=0.1, help='new_lr = lr * gamma')
-
+    
     # trainer_params
-    parser.add_argument('--epochs', type=int, default=5000, help="total training epochs")
+    parser.add_argument('--epochs', type=int, default=100, help="total training epochs")
     parser.add_argument('--train_episodes', type=int, default=10000 * 2, help="the num. of training instances per epoch")
-    parser.add_argument('--train_batch_size', type=int, default=64 * 2)
+    parser.add_argument('--train_batch_size', type=int, default=32)
     parser.add_argument('--validation_interval', type=int, default=50)
-    parser.add_argument('--model_save_interval', type=int, default=2500)
+    parser.add_argument('--model_save_interval', type=int, default=10)
     parser.add_argument('--checkpoint', type=str, default=None, help="resume training")
+    # trainer_params (3-PHASE CONTROLS)
+    parser.add_argument('--phase1_epochs', type=int, default=40, help="Duration of Phase 1 (RL Decoder)")
+    parser.add_argument('--phase2_epochs', type=int, default=70, help="End epoch of Phase 2 (SL Refiner)")
+    parser.add_argument('--lambda_recon', type=float, default=0.1, help="Weight for Slot Reconstruction loss")
 
     # settings (e.g., GPU)
     parser.add_argument('--seed', type=int, default=2023)

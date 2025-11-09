@@ -289,3 +289,47 @@ def show(x, y, label, title, xdes, ydes, path, min_y=None, max_y=None, x_scale="
     # plt.grid(True)
     plt.savefig(path, dpi=dpi, bbox_inches='tight', pad_inches=0)
     plt.close("all")
+
+def convert_solution_to_heatmap(solution_list, num_nodes, pomo_size=1):
+    """
+    Convert list of optimal tours to a visit heatmap/frequency tensor.
+
+    Args:
+        solution_list: List (batch_size) of tours. 
+                       Each tour is a list of node indices, e.g., [0, 5, 2, 0].
+        num_nodes: Total number of nodes (problem_size + 1).
+        pomo_size: POMO size (usually 1 for optimal solutions).
+
+    Returns:
+        heatmap: Tensor (batch_size, pomo_size, num_nodes)
+    """
+    batch_size = len(solution_list)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # Khởi tạo heatmap (B, P, N)
+    heatmap = torch.zeros(batch_size, pomo_size, num_nodes, device=device)
+    
+    for i in range(batch_size):
+        tour = solution_list[i]
+        if not isinstance(tour, torch.Tensor):
+            tour = torch.tensor(tour, device=device, dtype=torch.long)
+            
+        # Ghi lại tần suất thăm (thường là 1)
+        # Dùng scatter_add_ để xử lý an toàn
+        # tour.unsqueeze(0) -> (1, num_steps)
+        # .expand(pomo_size, -1) -> (pomo_size, num_steps)
+        tour_pomo = tour.unsqueeze(0).expand(pomo_size, -1) # (P, steps)
+        
+        heatmap[i].scatter_add_(
+            1, 
+            tour_pomo, 
+            torch.ones_like(tour_pomo, dtype=torch.float)
+        )
+            
+    # Chuẩn hóa (ví dụ: chia cho số lần thăm tối đa, thường là 1)
+    max_visits = heatmap.max(dim=2, keepdim=True)[0] + 1e-8
+    heatmap_normalized = heatmap / max_visits
+    
+    # Vì chúng ta chỉ có 1 lời giải tối ưu, chỉ cần trả về heatmap (B, N)
+    # Lấy POMO đầu tiên
+    return heatmap_normalized[:, 0, :] # Shape: (batch, num_nodes)

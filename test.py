@@ -32,8 +32,8 @@ if __name__ == "__main__":
     parser.add_argument('--problem', type=str, default="ALL", choices=["ALL", "CVRP", "OVRP", "VRPB", "VRPL", "VRPTW", "OVRPTW",
                                                                        "OVRPB", "OVRPL", "VRPBL", "VRPBTW", "VRPLTW",
                                                                        "OVRPBL", "OVRPBTW", "OVRPLTW", "VRPBLTW", "OVRPBLTW"])
-    parser.add_argument('--problem_size', type=int, default=100)
-    parser.add_argument('--pomo_size', type=int, default=100, help="the number of start node, should <= problem size")
+    parser.add_argument('--problem_size', type=int, default=50)
+    parser.add_argument('--pomo_size', type=int, default=50, help="the number of start node, should <= problem size")
 
     # model_params
     parser.add_argument('--model_type', type=str, default="MOE_LIGHT", choices=["SINGLE", "MTL", "MOE", "MOE_LIGHT"])
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # tester_params
     parser.add_argument('--checkpoint', type=str, default="./checkpoint/epoch-5000.pt", help="load pretrained model to evaluate")
     parser.add_argument('--test_episodes', type=int, default=1000)
-    parser.add_argument('--test_batch_size', type=int, default=1000)
+    parser.add_argument('--test_batch_size', type=int, default=100)
     parser.add_argument('--sample_size', type=int, default=10, help="only activate if eval_type is softmax")
     parser.add_argument('--aug_factor', type=int, default=8, choices=[1, 8], help="whether to use instance augmentation during evaluation")
     parser.add_argument('--aug_batch_size', type=int, default=100)

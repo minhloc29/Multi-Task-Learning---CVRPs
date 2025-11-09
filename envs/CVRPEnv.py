@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import torch
 import os, pickle
 import numpy as np
+import copy
 
 __all__ = ['CVRPEnv']
 
@@ -107,6 +108,87 @@ class CVRPEnv:
         ####################################
         self.reset_state = Reset_State()
         self.step_state = Step_State()
+
+    
+    def clone(self, deep_clone_history=False):
+        """
+        Tạo bản sao nhanh và an toàn cho gradient.
+    
+        Args:
+          deep_clone_history: Nếu False, không clone selected_node_list (tiết kiệm RAM)
+    
+        Returns:
+            cloned: Bản sao môi trường với:
+            - Static data: shared reference (read-only)
+            - Dynamic data: cloned tensors (với gradient)
+            - History: optional clone
+        """
+    
+        # === 1. TẠO INSTANCE MỚI (FAST) ===
+        # Option A: Bypass __init__ nếu có thể
+        cloned = CVRPEnv.__new__(CVRPEnv)
+        cloned.env_params = self.env_params
+        cloned.problem = self.problem
+    
+        # Hoặc Option B: Dùng __init__ bình thường
+        # cloned = CVRPEnv(**self.env_params)
+    
+        # === 2. STATIC DATA (SHARED) ===
+        cloned.batch_size = self.batch_size
+        cloned.BATCH_IDX = self.BATCH_IDX  # Tensor, nhưng read-only nên OK
+        cloned.POMO_IDX = self.POMO_IDX
+        cloned.START_NODE = self.START_NODE
+        cloned.depot_node_xy = self.depot_node_xy
+        cloned.depot_node_demand = self.depot_node_demand
+    
+        # CRITICAL: Check if reset_state has mutable tensors
+        if hasattr(self, 'reset_state'):
+           if isinstance(self.reset_state, dict):
+            # If dict, shallow copy keys but share tensor values
+            cloned.reset_state = {k: v for k, v in self.reset_state.items()}
+           else:
+            # If dataclass/object, share reference (assume immutable)
+            cloned.reset_state = self.reset_state
+    
+        # === 3. DYNAMIC DATA (CLONED) ===
+        cloned.selected_count = self.selected_count
+    
+        # Current state (must clone)
+        cloned.current_node = self.current_node.clone() if self.current_node is not None else None
+        cloned.at_the_depot = self.at_the_depot.clone() if self.at_the_depot is not None else None
+        cloned.load = self.load.clone() if self.load is not None else None
+        cloned.current_time = self.current_time.clone() if self.current_time is not None else None
+        cloned.current_coord = self.current_coord.clone() if self.current_coord is not None else None
+        cloned.length = self.length.clone() if self.length is not None else None
+    
+        # Masks (must clone - these change every step)
+        cloned.visited_ninf_flag = self.visited_ninf_flag.clone() if self.visited_ninf_flag is not None else None
+        cloned.ninf_mask = self.ninf_mask.clone() if self.ninf_mask is not None else None
+        cloned.finished = self.finished.clone() if self.finished is not None else None
+        cloned.open = self.open.clone() if self.open is not None else None
+    
+        # History (optional clone - can be large!)
+        if deep_clone_history:
+           cloned.selected_node_list = self.selected_node_list.clone() if self.selected_node_list is not None else None
+        else:
+          # Don't clone history to save memory
+          cloned.selected_node_list = None
+          # Or slice to current step:
+          # if self.selected_node_list is not None:
+          #     cloned.selected_node_list = self.selected_node_list[:, :, :self.selected_count].clone()
+    
+        # === 4. STATE OBJECTS (RECREATE) ===
+        cloned.step_state = Step_State()
+        cloned.step_state.BATCH_IDX = cloned.BATCH_IDX
+        cloned.step_state.POMO_IDX = cloned.POMO_IDX
+        cloned.step_state.START_NODE = cloned.START_NODE
+        cloned.step_state.PROBLEM = cloned.problem
+     
+        if hasattr(self.step_state, 'open') and self.step_state.open is not None:
+           cloned.step_state.open = self.step_state.open.clone()
+    
+        return cloned
+    
 
     def load_problems(self, batch_size, problems=None, aug_factor=1):
         if problems is not None:
