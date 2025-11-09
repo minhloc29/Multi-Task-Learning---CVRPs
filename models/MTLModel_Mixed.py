@@ -18,9 +18,9 @@ class MTLModel_Mixed(nn.Module):
         self.encoder = MTL_Encoder(**model_params)
         self.decoder = MTL_Decoder(**model_params)
         self.encoded_nodes = None  # shape: (batch, problem+1, EMBEDDING_DIM)
-        self.device = torch.device('cuda', torch.cuda.current_device()) if 'device' not in model_params.keys() else model_params['device']
+        # self.device = torch.device('cuda', torch.cuda.current_device()) if 'device' not in model_params.keys() else model_params['device']
         # assert self.model_params['norm'] == "batch", "The original MTLModel implementation uses batch normalization."
-
+        self.device = "cpu"
     def pre_forward(self, reset_state):
         #print(self.device)
         depot_xy = reset_state.depot_xy
@@ -126,6 +126,13 @@ class MTL_Encoder(nn.Module):
         self.embedding_depot = nn.Linear(2, embedding_dim)
         self.embedding_node = nn.Linear(5, embedding_dim)
 
+        # APPEND
+        # self.c_list = nn.Parameter(torch.Tensor([-0.5, -0.25, 0.0, 0.25, 0.5]))
+        # self.c_list_layer = nn.ParameterList([
+        #     nn.Parameter(torch.Tensor([-0.5, -0.25, 0.0, 0.25, 0.5])) 
+        #     for _ in range(encoder_layer_num)
+        # ])
+        
         self.a = nn.Parameter(torch.ones([encoder_layer_num]))
         self.b = nn.Parameter(torch.ones([encoder_layer_num]))
         

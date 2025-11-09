@@ -29,8 +29,8 @@ class MOEModel_Mixed(nn.Module):
         self.encoder = MTL_Encoder(**model_params)
         self.decoder = MTL_Decoder(**model_params)
         self.encoded_nodes = None  # shape: (batch, problem+1, EMBEDDING_DIM)
-        self.device = torch.device('cuda', torch.cuda.current_device()) if 'device' not in model_params.keys() else model_params['device']
-
+        # self.device = torch.device('cuda', torch.cuda.current_device()) if 'device' not in model_params.keys() else model_params['device']
+        self.device = "cpu"
     def pre_forward(self, reset_state):
         depot_xy = reset_state.depot_xy
         # shape: (batch, 1, 2)

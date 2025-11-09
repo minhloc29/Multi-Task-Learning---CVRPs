@@ -60,9 +60,9 @@ class CVRPEnv:
         self.problem_size = env_params['problem_size']
         self.pomo_size = env_params['pomo_size']
         self.loc_scaler = env_params['loc_scaler'] if 'loc_scaler' in env_params.keys() else None
-        self.device = torch.device('cuda', torch.cuda.current_device()) if 'device' not in env_params.keys() else env_params['device']
-
-        # Const @Load_Problem
+        # self.device = torch.device('cuda', torch.cuda.current_device()) if 'device' not in env_params.keys() else env_params['device']
+        self.device = "cpu"
+        # Const @Load_Problem       
         ####################################
         self.batch_size = None
         self.BATCH_IDX = None
