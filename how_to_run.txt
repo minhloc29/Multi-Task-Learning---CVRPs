@@ -1,2 +1,2 @@
 KMP_DUPLICATE_LIB_OK=TRUE python train.py --problem=CVRP --model_type=MTL_Mixed
-KMP_DUPLICATE_LIB_OK=TRUE python train.py --problem=CVRP --model_type=MOE_Mixed
+KMP_DUPLICATE_LIB_OK=TRUE python train.py --problem=CVRP --model_type=MOE_Mixed --epochs=100
