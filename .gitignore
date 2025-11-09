@@ -16,3 +16,5 @@ pretrained_stat
 pretrained_final
 tmp
 plot.py
+pretrained/
+results/
