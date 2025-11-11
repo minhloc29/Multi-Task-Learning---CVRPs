@@ -121,15 +121,20 @@ def get_env(problem):
 
 
 def get_model(model_type):
-    from models import SINGLEModel, MTLModel, MOEModel, MOEModel_Light
+    from models import SINGLEModel, MTLModel
+    from baselines.model.mixed_curvature.MOEModel_Light_Mixed import MOEModel_Light_Mixed
+    from baselines.model.mixed_curvature.MOEModel_Mixed import MOEModel_Mixed
+    from baselines.model.moe.MOEModel import MOEModel
     if model_type == "MTL":
         return MTLModel
     elif model_type == "MOE":
         return MOEModel
-    elif model_type == "MOE_LIGHT":
-        return MOEModel_Light
     elif model_type == "SINGLE":
         return SINGLEModel
+    elif model_type == "MOE_LIGHT_MIXED":
+        return MOEModel_Light_Mixed
+    elif model_type == "MOE_MIXED":
+        return MOEModel_Mixed
     else:
         return NotImplementedError
 

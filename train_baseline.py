@@ -4,7 +4,7 @@ import argparse
 import pprint as pp
 from datetime import datetime
 
-from Trainer1 import Trainer
+from Trainer_baseline import Trainer
 from utils import *
 
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument('--pomo_size', type=int, default=50, help="the number of start node, should <= problem size")
 
     # model_params
-    parser.add_argument('--model_type', type=str, default="MOE_LIGHT", choices=["SINGLE", "MTL", "MOE", "MOE_LIGHT"])
+    parser.add_argument('--model_type', type=str, default="MOE_LIGHT", choices=["SINGLE", "MTL", "MOE", "MOE_LIGHT", "MOE_LIGHT_MIXED", "MOE_MIXED"])
     parser.add_argument('--embedding_dim', type=int, default=128)
     parser.add_argument('--sqrt_embedding_dim', type=float, default=128**(1/2))
     parser.add_argument('--encoder_layer_num', type=int, default=6, help="the number of MHA in encoder")

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 # from tutel import moe as tutel_moe
-from .MOELayer import MoE
+from ..moe.MOELayer import MoE
 
 __all__ = ['MOEModel_Light']
 
