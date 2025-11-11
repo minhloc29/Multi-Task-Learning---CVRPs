@@ -18,3 +18,5 @@ tmp
 plot.py
 pretrained/
 results/
+data/
+results/
